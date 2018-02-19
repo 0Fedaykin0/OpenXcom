@@ -39,6 +39,7 @@
 #include "../Savegame/ItemContainer.h"
 #include "ManufactureStartState.h"
 #include "TechTreeViewerState.h"
+#include "../Savegame/Transfer.h"
 #include "../Ufopaedia/Ufopaedia.h"
 
 namespace OpenXcom
@@ -59,7 +60,8 @@ NewManufactureListState::NewManufactureListState(Base *base) : _base(base), _sho
 	_btnShowOnlyNew = new ToggleTextButton(148, 16, 8, 154);
 	_txtTitle = new Text(320, 17, 0, 30);
 	_txtItem = new Text(156, 9, 10, 62);
-	_txtCategory = new Text(130, 9, 166, 62);
+	_txtCategory = new Text(115, 9, 166, 62);
+	_txtOwn = new Text(19, 9, 281, 62);
 	_lstManufacture = new TextList(288, 80, 8, 70);
 	_cbxFilter = new ComboBox(this, 146, 16, 10, 46);
 	_cbxCategory = new ComboBox(this, 146, 16, 166, 46);
@@ -74,6 +76,7 @@ NewManufactureListState::NewManufactureListState(Base *base) : _base(base), _sho
 	add(_txtTitle, "text", "selectNewManufacture");
 	add(_txtItem, "text", "selectNewManufacture");
 	add(_txtCategory, "text", "selectNewManufacture");
+	add(_txtOwn, "text", "selectNewManufacture");
 	add(_lstManufacture, "list", "selectNewManufacture");
 	add(_cbxFilter, "catBox", "selectNewManufacture");
 	add(_cbxCategory, "catBox", "selectNewManufacture");
@@ -95,7 +98,10 @@ NewManufactureListState::NewManufactureListState(Base *base) : _base(base), _sho
 
 	_txtCategory->setText(tr("STR_CATEGORY"));
 
-	_lstManufacture->setColumns(3, 156, 120, 10);
+	_txtOwn->setText(tr("STR_OWN"));
+
+	_lstManufacture->setColumns(4, 156, 105, 10, 15);
+	_lstManufacture->setAlign(ALIGN_RIGHT, 3);
 	_lstManufacture->setSelectable(true);
 	_lstManufacture->setBackground(_window);
 	_lstManufacture->setMargin(2);
@@ -439,7 +445,35 @@ void NewManufactureListState::fillProductionList(bool refreshCategories)
 				}
 			}
 
-			_lstManufacture->addRow(3, tr(manuf->getName()).c_str(), tr(manuf->getCategory()).c_str(), ss.str().c_str());
+			//_lstManufacture->addRow(3, tr(manuf->getName()).c_str(), tr(manuf->getCategory()).c_str(), ss.str().c_str());
+			// amount owned
+			int amount_owned = 0;
+			for (std::map<const RuleItem*, int>::const_iterator pitem = manuf->getProducedItems().begin(); pitem != manuf->getProducedItems().end(); ++pitem)
+			{
+				for (std::vector<Base*>::iterator basei = _game->getSavedGame()->getBases()->begin(); basei != _game->getSavedGame()->getBases()->end(); ++basei)
+				{
+					amount_owned += (*basei)->getStorageItems()->getItem(pitem->first);
+					for (std::vector<Transfer*>::iterator j = (*basei)->getTransfers()->begin(); j != (*basei)->getTransfers()->end(); ++j)
+					{
+						if ((*j)->getItems() == pitem->first->getName())
+						{
+							amount_owned += (*j)->getQuantity();
+						}
+					}
+					for (std::vector<Craft*>::iterator j = (*basei)->getCrafts()->begin(); j != (*basei)->getCrafts()->end(); ++j)
+					{
+						amount_owned += (*j)->getItems()->getItem(pitem->first);
+					}
+				}
+			}
+			std::wostringstream amount_owned_str;
+			if (amount_owned > 0)
+				amount_owned_str << amount_owned;
+			else
+				amount_owned_str << L"";
+
+			_lstManufacture->addRow(4, tr(manuf->getName()).c_str(), tr(manuf->getCategory()).c_str(), ss.str().c_str(), amount_owned_str.str().c_str());
+
 			_displayedStrings.push_back(manuf->getName().c_str());
 
 			// colors
