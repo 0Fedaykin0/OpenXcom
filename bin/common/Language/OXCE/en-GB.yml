@@ -106,6 +106,7 @@ en-GB:
   STR_FILTER_FACILITY_REQUIRED: "Facility Missing"
   STR_FILTER_HIDDEN: "Hidden"
   STR_FILTER_MISSING: "Missing"
+  STR_OWN: "OWN"
 #NewResearchListState.cpp
   STR_SORT_DEFAULT: "Default"
   STR_SORT_BY_COST: "By cost"
