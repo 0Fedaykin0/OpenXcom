@@ -1133,6 +1133,9 @@
     <ClCompile Include="Savegame\RankCount.cpp">
       <Filter>Savegame</Filter>
     </ClCompile>
+    <ClCompile Include="Battlescape\SoldierExperienceState.cpp">
+      <Filter>Battlescape</Filter>
+    </ClCompile>
     <ClCompile Include="Basescape\SoldierTransformState.cpp">
       <Filter>Basescape</Filter>
     </ClCompile>
@@ -2332,6 +2335,9 @@
     </ClInclude>
     <ClInclude Include="Savegame\RankCount.h">
       <Filter>Savegame</Filter>
+    </ClInclude>
+    <ClInclude Include="Battlescape\SoldierExperienceState.h">
+      <Filter>Battlescape</Filter>
     </ClInclude>
     <ClInclude Include="Mod\LoadYaml.h">
       <Filter>Mod</Filter>
