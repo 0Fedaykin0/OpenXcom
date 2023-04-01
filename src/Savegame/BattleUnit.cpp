@@ -3780,6 +3780,14 @@ bool BattleUnit::hasGainedAnyExperience()
 	return _exp.bravery || _exp.reactions || _exp.firing || _exp.psiSkill || _exp.psiStrength || _exp.melee || _exp.throwing || _exp.mana;
 }
 
+/*
+* Returns pointer to the soldiers experience
+*/
+UnitStats* BattleUnit::getExperience()
+{
+	return &_exp;
+}
+
 void BattleUnit::updateGeoscapeStats(Soldier *soldier) const
 {
 	soldier->addMissionCount();

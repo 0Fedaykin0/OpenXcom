@@ -435,6 +435,7 @@
     <ClCompile Include="Battlescape\ScannerState.cpp" />
     <ClCompile Include="Battlescape\ScannerView.cpp" />
     <ClCompile Include="Battlescape\SkillMenuState.cpp" />
+    <ClCompile Include="Battlescape\SoldierExperienceState.cpp" />
     <ClCompile Include="Battlescape\TurnDiaryState.cpp" />
     <ClCompile Include="Battlescape\UnitFallBState.cpp" />
     <ClCompile Include="Battlescape\UnitInfoState.cpp" />
@@ -816,6 +817,7 @@
     <ClInclude Include="Battlescape\ScannerState.h" />
     <ClInclude Include="Battlescape\ScannerView.h" />
     <ClInclude Include="Battlescape\SkillMenuState.h" />
+    <ClInclude Include="Battlescape\SoldierExperienceState.h" />
     <ClInclude Include="Battlescape\TurnDiaryState.h" />
     <ClInclude Include="Battlescape\UnitFallBState.h" />
     <ClInclude Include="Battlescape\UnitInfoState.h" />

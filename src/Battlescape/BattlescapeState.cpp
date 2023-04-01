@@ -36,6 +36,7 @@
 #include "WarningMessage.h"
 #include "InfoboxState.h"
 #include "TurnDiaryState.h"
+#include "SoldierExperienceState.h"
 #include "DebriefingState.h"
 #include "MiniMapState.h"
 #include "BattlescapeGenerator.h"
@@ -2674,6 +2675,12 @@ inline void BattlescapeState::handle(Action *action)
 						}
 					}
 					_game->pushState(new InfoboxState(ss.str()));
+				}
+				// "alt-e" show experience for selected soldier
+				else if (key == SDLK_e && altPressed)
+				{
+					//_battleGame->getCurrentAction()->actor = unit;
+					_game->pushState(new SoldierExperienceState(_save->getSelectedUnit()));
 				}
 				// "ctrl-m" - melee damage preview
 				else if (key == SDLK_m && ctrlPressed)

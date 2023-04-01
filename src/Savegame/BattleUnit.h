@@ -483,6 +483,8 @@ public:
 	void addMeleeExp();
 	/// Did the unit gain any experience yet?
 	bool hasGainedAnyExperience();
+	/// Returns unit gained experience
+	UnitStats *getExperience();
 	/// Updates the stats of a Geoscape soldier.
 	void updateGeoscapeStats(Soldier *soldier) const;
 	/// Check if unit eligible for squaddie promotion.
