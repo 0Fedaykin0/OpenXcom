@@ -455,7 +455,8 @@ void NewManufactureListState::fillProductionList(bool refreshCategories)
 					amount_owned += (*basei)->getStorageItems()->getItem(pitem->first);
 					for (std::vector<Transfer*>::iterator j = (*basei)->getTransfers()->begin(); j != (*basei)->getTransfers()->end(); ++j)
 					{
-						if ((*j)->getItems() == pitem->first->getName())
+						if ((*j)->getType() != TRANSFER_ITEM) continue;
+						if ((*j)->getItems()->getName() == pitem->first->getName())
 						{
 							amount_owned += (*j)->getQuantity();
 						}
@@ -468,6 +469,7 @@ void NewManufactureListState::fillProductionList(bool refreshCategories)
 			}
 			std::wostringstream amount_owned_str;
 			if (amount_owned > 0)
+				
 				amount_owned_str << amount_owned;
 			else
 				amount_owned_str << L"";
