@@ -37,6 +37,7 @@
 #include "../Mod/ExtraSprites.h"
 #include "../Mod/Mod.h"
 #include "../Mod/RuleBaseFacility.h"
+#include "../Mod/RuleCommendations.h"
 #include "../Mod/RuleCraft.h"
 #include "../Mod/RuleCraftWeapon.h"
 #include "../Mod/RuleInterface.h"
@@ -592,6 +593,12 @@ void StatsForNerdsState::initLists()
 	case UFOPAEDIA_TYPE_CRAFT_WEAPON:
 	case UFOPAEDIA_TYPE_TFTD_CRAFT_WEAPON:
 		initCraftWeaponList();
+		break;
+	case UFOPAEDIA_TYPE_SOLDIER:
+		initSoldierList();
+		break;
+	case UFOPAEDIA_TYPE_UNIT:
+		initUnitList();
 		break;
 	case UFOPAEDIA_TYPE_UNKNOWN:
 		initSoldierBonusList();
@@ -1193,6 +1200,36 @@ void StatsForNerdsState::addVectorOfIntegers(std::ostringstream &ss, const std::
 }
 
 /**
+ * Adds a map of integer/integer numbers to the table.
+ */
+void StatsForNerdsState::addMapOfIntegers(std::ostringstream& ss, const std::map<int, int>& map, const std::string& propertyName)
+{
+	if (map.empty() && !_showDefaults)
+	{
+		return;
+	}
+	resetStream(ss);
+	int i = 0;
+	ss << "{";
+	for (auto& item : map)
+	{
+		if (i > 0)
+		{
+			ss << ", ";
+		}
+		ss << item.first << ":" << item.second;
+		i++;
+	}
+	ss << "}";
+	_lstRawData->addRow(2, trp(propertyName).c_str(), ss.str().c_str());
+	++_counter;
+	if (!map.empty())
+	{
+		_lstRawData->setCellColor(_lstRawData->getLastRowIndex(), 1, _pink);
+	}
+}
+
+/**
  * Adds a BattleType to the table.
  */
 void StatsForNerdsState::addBattleType(std::ostringstream &ss, const BattleType &value, const std::string &propertyName, const BattleType &defaultvalue)
@@ -1409,7 +1446,8 @@ void StatsForNerdsState::addPercentageSignOrNothing(std::ostringstream &ss, cons
 /**
  * Adds a full RuleItemUseCost to the table.
  */
-void StatsForNerdsState::addRuleItemUseCostFull(std::ostringstream &ss, const RuleItemUseCost &value, const std::string &propertyName, const RuleItemUseCost &defaultvalue, bool smartFormat, const RuleItemUseCost &formatBy)
+template<typename T>
+void StatsForNerdsState::addRuleItemUseCostFull(std::ostringstream &ss, const RuleItemUseRuleBase<T> &value, const std::string &propertyName, const RuleItemUseRuleBase<T> &defaultvalue, bool smartFormat, const RuleItemUseFlat &formatBy)
 {
 	bool isDefault = false;
 	if (value.Time == defaultvalue.Time &&
@@ -1854,7 +1892,6 @@ void StatsForNerdsState::initItemList()
 	addInteger(ss, itemRule->getManaExperience(), "manaExperience");
 	addBoolean(ss, itemRule->getArcingShot(), "arcingShot");
 	addBoolean(ss, itemRule->isFireExtinguisher(), "isFireExtinguisher");
-	addBoolean(ss, itemRule->isExplodingInHands(), "isExplodingInHands");
 	addInteger(ss, itemRule->getWaypoints(), "waypoints");
 	addInteger(ss, itemRule->getSprayWaypoints(), "sprayWaypoints");
 
@@ -1873,6 +1910,10 @@ void StatsForNerdsState::initItemList()
 	addBoolean(ss, itemRule->convertToCivilian(), "convertToCivilian");
 	addBoolean(ss, itemRule->isLOSRequired(), "LOSRequired");
 
+	if (itemBattleType == BT_GRENADE || _showDebug)
+	{
+		addInteger(ss, itemRule->getExplodeInventory(mod), "explodeInventory", 0); // not raw!
+	}
 	if (itemBattleType == BT_FIREARM
 		|| itemBattleType == BT_GRENADE
 		|| itemBattleType == BT_PROXIMITYGRENADE
@@ -1937,8 +1978,12 @@ void StatsForNerdsState::initItemList()
 	}
 
 	addInteger(ss, itemRule->getWeight(), "weight", 3);
-	addInteger(ss, itemRule->getThrowRange(), "throwRange");
-	addInteger(ss, itemRule->getUnderwaterThrowRange(), "underwaterThrowRange");
+	addInteger(ss, itemRule->getThrowRange(), "throwRange", 200);
+	addInteger(ss, itemRule->getUnderwaterThrowRange(), "underwaterThrowRange", 200);
+
+	addInteger(ss, itemRule->getThrowDropoffRange(), "throwDropoffRange", 99);
+	addInteger(ss, itemRule->getUnderwaterThrowDropoffRange(), "underwaterThrowDropoffRange", 99);
+	addInteger(ss, itemRule->getThrowDropoff(), "throwDropoff", 5);
 
 	addRuleStatBonus(ss, *itemRule->getThrowMultiplierRaw(), "throwMultiplier");
 	addIntegerPercent(ss, itemRule->getAccuracyThrow(), "accuracyThrow", 100);
@@ -2061,6 +2106,7 @@ void StatsForNerdsState::initItemList()
 		addFloatAsPercentage(ss, rule->ToTile, "ToTile", ruleByResistType->ToTile);
 		addBoolean(ss, rule->RandomTile, "RandomTile", ruleByResistType->RandomTile);
 		addInteger(ss, rule->TileDamageMethod, "TileDamageMethod", ruleByResistType->TileDamageMethod);
+		addInteger(ss, rule->TileDamageLimit, "TileDamageLimit", ruleByResistType->TileDamageLimit);
 
 		endHeading();
 	}
@@ -2077,6 +2123,9 @@ void StatsForNerdsState::initItemList()
 		addSingleString(ss, itemRule->getConfigAimed()->name, "name", "STR_AIMED_SHOT");
 		addSingleString(ss, itemRule->getConfigAimed()->shortName, "shortName");
 		addInteger(ss, itemRule->getConfigAimed()->ammoSlot, "ammoSlot");
+		addInteger(ss, itemRule->getConfigAimed()->ammoZombieUnitChanceOverride, "ammoZombieUnitChanceOverride", -1);
+		addInteger(ss, itemRule->getConfigAimed()->ammoSpawnUnitChanceOverride, "ammoSpawnUnitChanceOverride", -1);
+		addInteger(ss, itemRule->getConfigAimed()->ammoSpawnItemChanceOverride, "ammoSpawnItemChanceOverride", -1);
 		addBoolean(ss, itemRule->getConfigAimed()->arcing, "arcing");
 		endHeading();
 	}
@@ -2089,6 +2138,9 @@ void StatsForNerdsState::initItemList()
 		addSingleString(ss, itemRule->getConfigAuto()->name, "name", "STR_AUTO_SHOT");
 		addSingleString(ss, itemRule->getConfigAuto()->shortName, "shortName");
 		addInteger(ss, itemRule->getConfigAuto()->ammoSlot, "ammoSlot");
+		addInteger(ss, itemRule->getConfigAuto()->ammoZombieUnitChanceOverride, "ammoZombieUnitChanceOverride", -1);
+		addInteger(ss, itemRule->getConfigAuto()->ammoSpawnUnitChanceOverride, "ammoSpawnUnitChanceOverride", -1);
+		addInteger(ss, itemRule->getConfigAuto()->ammoSpawnItemChanceOverride, "ammoSpawnItemChanceOverride", -1);
 		addBoolean(ss, itemRule->getConfigAuto()->arcing, "arcing");
 		endHeading();
 	}
@@ -2101,6 +2153,9 @@ void StatsForNerdsState::initItemList()
 		addSingleString(ss, itemRule->getConfigSnap()->name, "name", "STR_SNAP_SHOT");
 		addSingleString(ss, itemRule->getConfigSnap()->shortName, "shortName");
 		addInteger(ss, itemRule->getConfigSnap()->ammoSlot, "ammoSlot");
+		addInteger(ss, itemRule->getConfigSnap()->ammoZombieUnitChanceOverride, "ammoZombieUnitChanceOverride", -1);
+		addInteger(ss, itemRule->getConfigSnap()->ammoSpawnUnitChanceOverride, "ammoSpawnUnitChanceOverride", -1);
+		addInteger(ss, itemRule->getConfigSnap()->ammoSpawnItemChanceOverride, "ammoSpawnItemChanceOverride", -1);
 		addBoolean(ss, itemRule->getConfigSnap()->arcing, "arcing");
 		endHeading();
 	}
@@ -2123,11 +2178,15 @@ void StatsForNerdsState::initItemList()
 			}
 		}
 		addInteger(ss, ammoSlotCurrent, "ammoSlot", ammoSlotDefault);
+		addInteger(ss, itemRule->getConfigMelee()->ammoZombieUnitChanceOverride, "ammoZombieUnitChanceOverride", -1);
+		addInteger(ss, itemRule->getConfigMelee()->ammoSpawnUnitChanceOverride, "ammoSpawnUnitChanceOverride", -1);
+		addInteger(ss, itemRule->getConfigMelee()->ammoSpawnItemChanceOverride, "ammoSpawnItemChanceOverride", -1);
 		addBoolean(ss, itemRule->getConfigMelee()->arcing, "arcing");
 		endHeading();
 	}
 
 	addInteger(ss, itemRule->getClipSize(), "clipSize", 0, false, "STR_CLIP_SIZE_UNLIMITED", -1);
+	addBoolean(ss, itemRule->isAmmoRechargeable(), "isAmmoRechargeable");
 
 	// compatibleAmmo*
 	// tuLoad*
@@ -2168,6 +2227,9 @@ void StatsForNerdsState::initItemList()
 	addInteger(ss, itemRule->getArmor(), "armor", 20);
 
 	addBattleMediKitType(ss, itemRule->getMediKitType(), "medikitType");
+	addSingleString(ss, itemRule->getPainKillerActionName(), "painKillerActionName", "STR_PAIN_KILLER");
+	addSingleString(ss, itemRule->getStimulantActionName(), "stimulantActionName", "STR_STIMULANT");
+	addSingleString(ss, itemRule->getHealActionName(), "healActionName", "STR_HEAL");
 	addSingleString(ss, itemRule->getMedikitActionName(), "medikitActionName", "STR_USE_MEDI_KIT");
 	addBoolean(ss, itemRule->getAllowTargetSelf(), "medikitTargetSelf");
 	addBoolean(ss, itemRule->getAllowTargetImmune(), "medikitTargetImmune");
@@ -2236,9 +2298,11 @@ void StatsForNerdsState::initItemList()
 		addSingleString(ss, itemRule->getUfopediaType(), "ufopediaType");
 		addSingleString(ss, itemRule->getName(), "name", itemRule->getType());
 		addSingleString(ss, itemRule->getNameAsAmmo(), "nameAsAmmo");
+		addInteger(ss, itemRule->getLoadOrder(), "loadOrder");
 		addInteger(ss, itemRule->getListOrder(), "listOrder");
 		addBoolean(ss, itemRule->getHidePower(), "hidePower");
 		addBoolean(ss, itemRule->getIgnoreAmmoPower(), "ignoreAmmoPower");
+		addSingleString(ss, itemRule->getMonthlyBuyLimitMessage(), "monthlyBuyLimitMessage");
 
 		addSection("{Inventory}", "", _white);
 		addVectorOfIntegers(ss, itemRule->getCustomItemPreviewIndex(), "customItemPreviewIndex");
@@ -2408,14 +2472,14 @@ void StatsForNerdsState::initItemList()
 
 		// flatRate*
 
-		addRuleItemUseCostFull(ss, itemRule->getFlatAimed(), "flatAimed", RuleItemUseCost(0, 1));
-		addRuleItemUseCostFull(ss, itemRule->getFlatAuto(), "flatAuto", RuleItemUseCost(0, 1));
-		addRuleItemUseCostFull(ss, itemRule->getFlatSnap(), "flatSnap", RuleItemUseCost(0, 1));
-		addRuleItemUseCostFull(ss, itemRule->getFlatMelee(), "flatMelee", RuleItemUseCost(0, 1));
-		addRuleItemUseCostFull(ss, itemRule->getFlatUse(), "flatUse", RuleItemUseCost(0, 1));
-		addRuleItemUseCostFull(ss, itemRule->getFlatThrow(), "flatThrow", RuleItemUseCost(0, 1));
-		addRuleItemUseCostFull(ss, itemRule->getFlatPrime(), "flatPrime", RuleItemUseCost(0, 1));
-		addRuleItemUseCostFull(ss, itemRule->getFlatUnprime(), "flatUnprime", RuleItemUseCost(0, 1));
+		addRuleItemUseCostFull(ss, itemRule->getFlatAimed(), "flatAimed", RuleItemUseFlat(0, 1));
+		addRuleItemUseCostFull(ss, itemRule->getFlatAuto(), "flatAuto", RuleItemUseFlat(0, 1));
+		addRuleItemUseCostFull(ss, itemRule->getFlatSnap(), "flatSnap", RuleItemUseFlat(0, 1));
+		addRuleItemUseCostFull(ss, itemRule->getFlatMelee(), "flatMelee", RuleItemUseFlat(0, 1));
+		addRuleItemUseCostFull(ss, itemRule->getFlatUse(), "flatUse", RuleItemUseFlat(0, 1));
+		addRuleItemUseCostFull(ss, itemRule->getFlatThrow(), "flatThrow", RuleItemUseFlat(0, 1));
+		addRuleItemUseCostFull(ss, itemRule->getFlatPrime(), "flatPrime", RuleItemUseFlat(0, 1));
+		addRuleItemUseCostFull(ss, itemRule->getFlatUnprime(), "flatUnprime", RuleItemUseFlat(0, 1));
 
 		addSection("{Script tags}", "", _white, true);
 		{
@@ -2776,7 +2840,8 @@ void StatsForNerdsState::initArmorList()
 		_txtTitle->setAlign(ALIGN_LEFT);
 	}
 
-	addIntegerPercent(ss, armorRule->getHeatVision(), "heatVision");
+	addIntegerPercent(ss, armorRule->getVisibilityThroughSmoke(), "heatVision"); // visibilityThroughSmoke
+	addIntegerPercent(ss, armorRule->getVisibilityThroughFire(), "visibilityThroughFire", 100);
 	addInteger(ss, armorRule->getPsiVision(), "psiVision");
 	addInteger(ss, armorRule->getPsiCamouflage(), "psiCamouflage");
 
@@ -2802,7 +2867,10 @@ void StatsForNerdsState::initArmorList()
 		endHeading();
 	}
 
-	addVectorOfRules(ss, armorRule->getUnits(), "units");
+	addVectorOfRules(ss, armorRule->getUnitsRaw(), "units");
+	addVectorOfIntegers(ss, armorRule->getRanksRaw(), "ranks");
+	addRule(ss, armorRule->getRequiredAward(), "requiresAward");
+	addRuleNamed(ss, armorRule->getRequiredBonus(), "requiresBonus");
 
 	ModScript::scriptCallback<ModScript::StatsForNerdsArmor>(armorRule, armorRule, this, _game->getSavedGame());
 
@@ -2813,6 +2881,7 @@ void StatsForNerdsState::initArmorList()
 		addSection("{Naming}", "", _white);
 		addSingleString(ss, armorRule->getType(), "type");
 		addSingleString(ss, armorRule->getUfopediaType(), "ufopediaType");
+		addInteger(ss, armorRule->getGroup(), "group");
 		addInteger(ss, armorRule->getListOrder(), "listOrder");
 		addRuleNamed(ss, armorRule->getRequiredResearch(), "requires");
 
@@ -2882,6 +2951,7 @@ void StatsForNerdsState::initArmorList()
 		addInteger(ss, armorRule->getStandHeight(), "standHeight", -1);
 		addInteger(ss, armorRule->getKneelHeight(), "kneelHeight", -1);
 		addInteger(ss, armorRule->getFloatHeight(), "floatHeight", -1);
+		addInteger(ss, armorRule->getMeleeOriginVoxelVerticalOffset(), "meleeOriginVoxelVerticalOffset");
 		addFloat(ss, armorRule->getOverKill(), "overKill", 0.5f);
 		addBoolean(ss, armorRule->isPilotArmor(), "isPilotArmor");
 		addBoolean(ss, armorRule->getAllowTwoMainWeapons(), "allowTwoMainWeapons");
@@ -2975,8 +3045,9 @@ void StatsForNerdsState::initSoldierBonusList()
 
 	addInteger(ss, bonusRule->getVisibilityAtDark(), "visibilityAtDark");
 	addInteger(ss, bonusRule->getVisibilityAtDay(), "visibilityAtDay");
-	addInteger(ss, bonusRule->getPsiVision(), "getPsiVision");
-	addInteger(ss, bonusRule->getHeatVision(), "getHeatVision");
+	addInteger(ss, bonusRule->getPsiVision(), "psiVision");
+	addInteger(ss, bonusRule->getVisibilityThroughSmoke(), "heatVision"); // visibilityThroughSmoke
+	addInteger(ss, bonusRule->getVisibilityThroughFire(), "visibilityThroughFire", 0);
 
 	addHeading("recovery");
 	{
@@ -3166,6 +3237,8 @@ void StatsForNerdsState::initFacilityList()
 	addInteger(ss, facilityRule->getAmmoMax(), "ammoMax", 0);
 	addInteger(ss, facilityRule->getRearmRate(), "rearmRate", 1);
 	addInteger(ss, facilityRule->getAmmoNeeded(), "ammoNeeded", 1);
+	addBoolean(ss, facilityRule->unifiedDamageFormula(), "unifiedDamageFormula");
+	addIntegerPercent(ss, facilityRule->getShieldDamageModifier(), "shieldDamageModifier", 100);
 	addRule(ss, facilityRule->getAmmoItem(), "ammoItem");
 
 	addInteger(ss, facilityRule->getMaxAllowedPerBase(), "maxAllowedPerBase");
@@ -3179,7 +3252,31 @@ void StatsForNerdsState::initFacilityList()
 	addVectorOfRules(ss, facilityRule->getLeavesBehindOnSell(), "leavesBehindOnSell");
 	addInteger(ss, facilityRule->getRemovalTime(), "removalTime");
 	addBoolean(ss, facilityRule->getCanBeBuiltOver(), "canBeBuiltOver");
+	addBoolean(ss, facilityRule->isUpgradeOnly(), "upgradeOnly");
 	addVectorOfRules(ss, facilityRule->getBuildOverFacilities(), "buildOverFacilities");
+
+	if (facilityRule->getDefenseValue() > 0)
+	{
+		addHeading("_calculatedValues");
+		if (facilityRule->unifiedDamageFormula() && facilityRule->getAmmoItem())
+		{
+			std::ostringstream ss2;
+			ss2 << facilityRule->getAmmoItem()->getDamageType()->getRandomDamage(facilityRule->getDefenseValue(), 1);
+			ss2 << "-";
+			ss2 << facilityRule->getAmmoItem()->getDamageType()->getRandomDamage(facilityRule->getDefenseValue(), 2);
+			addSingleString(ss, ss2.str(), "_damageRange", "", false);
+		}
+		else
+		{
+			// (damage) * (50-150% damage spread)
+			std::ostringstream ss2;
+			ss2 << facilityRule->getDefenseValue() / 2;
+			ss2 << "-";
+			ss2 << facilityRule->getDefenseValue() / 2 + facilityRule->getDefenseValue();
+			addSingleString(ss, ss2.str(), "_damageRange", "", false);
+		}
+		endHeading();
+	}
 
 	if (_showDebug)
 	{
@@ -3187,6 +3284,7 @@ void StatsForNerdsState::initFacilityList()
 
 		addSection("{Naming}", "", _white);
 		addSingleString(ss, facilityRule->getType(), "type");
+		addSingleString(ss, facilityRule->getUfopediaType(), "ufopediaType");
 		addInteger(ss, facilityRule->getListOrder(), "listOrder");
 		addInteger(ss, facilityRule->getMissileAttraction(), "missileAttraction", 100);
 		addRule(ss, facilityRule->getDestroyedFacility(), "destroyedFacility");
@@ -3271,11 +3369,15 @@ void StatsForNerdsState::initCraftList()
 	addInteger(ss, craftRule->getMaxUnits(), "soldiers");
 	addInteger(ss, craftRule->getMaxUnitsLimit(), "maxUnitsLimit", craftRule->getMaxUnits());
 	addInteger(ss, craftRule->getPilots(), "pilots");
+	addUnitStatBonus(ss, craftRule->getPilotMinStatsRequired(), "pilotMinStatsRequired");
+	addVectorOfRulesNamed(ss, craftRule->getPilotSoldierBonusesRequired(), "pilotSoldierBonusesRequired");
 	addInteger(ss, craftRule->getMaxVehiclesAndLargeSoldiers(), "vehicles");
 	addInteger(ss, craftRule->getMaxVehiclesAndLargeSoldiersLimit(), "maxHWPUnitsLimit", craftRule->getMaxVehiclesAndLargeSoldiers());
 
 	addBoolean(ss, craftRule->isOnlyOneSoldierGroupAllowed(), "onlyOneSoldierGroupAllowed");
 	addVectorOfIntegers(ss, craftRule->getAllowedSoldierGroups(), "allowedSoldierGroups");
+	addVectorOfIntegers(ss, craftRule->getAllowedArmorGroups(), "allowedArmorGroups");
+	addMapOfIntegers(ss, craftRule->getLimitArmorGroups(), "limitArmorGroups");
 
 	addInteger(ss, craftRule->getMaxSmallSoldiers(), "maxSmallSoldiers", -1);
 	addInteger(ss, craftRule->getMaxLargeSoldiers(), "maxLargeSoldiers", -1);
@@ -3380,6 +3482,7 @@ void StatsForNerdsState::initCraftList()
 		addInteger(ss, craftRule->getMaxDamage(), "damageMax");
 		addInteger(ss, craftRule->getStats().armor, "armor");
 		addIntegerPercent(ss, craftRule->getStats().avoidBonus, "avoidBonus");
+		addIntegerPercent(ss, craftRule->getStats().avoidBonus2, "avoidBonus2");
 		addIntegerPercent(ss, craftRule->getStats().powerBonus, "powerBonus");
 		addIntegerPercent(ss, craftRule->getStats().hitBonus, "hitBonus");
 		addInteger(ss, craftRule->getMaxFuel(), "fuelMax");
@@ -3405,6 +3508,7 @@ void StatsForNerdsState::initCraftList()
 	addBoolean(ss, craftRule->notifyWhenRefueled(), "notifyWhenRefueled");
 	addBoolean(ss, craftRule->canAutoPatrol(), "autoPatrol");
 	addBoolean(ss, craftRule->isUndetectable(), "undetectable");
+	addBoolean(ss, craftRule->patrolWithoutFuel(), "patrolWithoutFuel");
 
 	addBoolean(ss, craftRule->keepCraftAfterFailedMission(), "keepCraftAfterFailedMission");
 
@@ -3434,6 +3538,7 @@ void StatsForNerdsState::initCraftList()
 		addSection("{Naming}", "", _white);
 		addSingleString(ss, craftRule->getType(), "type");
 		addInteger(ss, craftRule->getListOrder(), "listOrder");
+		addSingleString(ss, craftRule->getMonthlyBuyLimitMessage(), "monthlyBuyLimitMessage");
 
 		addSection("{Geoscape}", "", _white);
 		addSingleString(ss, craftRule->getDefaultDisplayAltitude(), "defaultAltitude", "STR_VERY_LOW");
@@ -3597,6 +3702,7 @@ void StatsForNerdsState::initUfoList()
 		addInteger(ss, ufoRule->getStats().damageMax, "damageMax");
 		addInteger(ss, ufoRule->getStats().armor, "armor");
 		addIntegerPercent(ss, ufoRule->getStats().avoidBonus, "avoidBonus");
+		addIntegerPercent(ss, ufoRule->getStats().avoidBonus2, "avoidBonus2");
 		addIntegerPercent(ss, ufoRule->getStats().powerBonus, "powerBonus");
 		addIntegerPercent(ss, ufoRule->getStats().hitBonus, "hitBonus");
 		addInteger(ss, ufoRule->getStats().fuelMax, "fuelMax");
@@ -3664,6 +3770,7 @@ void StatsForNerdsState::initUfoList()
 				addInteger(ss, raceBonus.second.damageMax, "damageMax");
 				addInteger(ss, raceBonus.second.armor, "armor");
 				addIntegerPercent(ss, raceBonus.second.avoidBonus, "avoidBonus");
+				addIntegerPercent(ss, raceBonus.second.avoidBonus2, "avoidBonus2");
 				addIntegerPercent(ss, raceBonus.second.powerBonus, "powerBonus");
 				addIntegerPercent(ss, raceBonus.second.hitBonus, "hitBonus");
 				addInteger(ss, raceBonus.second.fuelMax, "fuelMax");
@@ -3697,11 +3804,18 @@ void StatsForNerdsState::initUfoList()
 		addInteger(ss, ufoRule->getSoftlockThreshold(), "softlockThreshold", 100);
 		addSingleString(ss, ufoRule->getHitImage(), "hitImage");
 		addInteger(ss, ufoRule->getMissilePower(), "missilePower");
+		addInteger(ss, ufoRule->getMissileStopChance(), "missileStopChance");
 		addBoolean(ss, ufoRule->isUnmanned(), "unmanned");
+		addBoolean(ss, ufoRule->isInstaHyper(), "instaHyper");
+		addBoolean(ss, ufoRule->isNoAlert(), "noAlert");
 		addInteger(ss, ufoRule->getSplashdownSurvivalChance(), "splashdownSurvivalChance", 100);
 		addInteger(ss, ufoRule->getFakeWaterLandingChance(), "fakeWaterLandingChance", 0);
 
 		addSection("{Visuals}", "", _white);
+		addInteger(ss, ufoRule->getRadius(), "radius", -1);
+		addInteger(ss, ufoRule->getDefaultVisibility(), "visibility");
+		addInteger(ss, ufoRule->getBlobSize(), "blobSize", -1);
+
 		addInteger(ss, ufoRule->getSprite(), "sprite", -1); // INTERWIN.DAT
 		addSingleString(ss, ufoRule->getModSprite(), "modSprite", "", false);
 		addInteger(ss, ufoRule->getMarker(), "marker", -1);
@@ -3774,6 +3888,7 @@ void StatsForNerdsState::initCraftWeaponList()
 
 	addInteger(ss, craftWeaponRule->getTractorBeamPower(), "tractorBeamPower");
 	addInteger(ss, craftWeaponRule->getDamage(), "damage");
+	addBoolean(ss, craftWeaponRule->unifiedDamageFormula(), "unifiedDamageFormula");
 	addIntegerPercent(ss, craftWeaponRule->getShieldDamageModifier(), "shieldDamageModifier", 100);
 	addIntegerKm(ss, craftWeaponRule->getRange(), "range");
 	addIntegerPercent(ss, craftWeaponRule->getAccuracy(), "accuracy");
@@ -3794,6 +3909,7 @@ void StatsForNerdsState::initCraftWeaponList()
 		addInteger(ss, craftWeaponRule->getBonusStats().damageMax, "damageMax");
 		addInteger(ss, craftWeaponRule->getBonusStats().armor, "armor");
 		addIntegerPercent(ss, craftWeaponRule->getBonusStats().avoidBonus, "avoidBonus");
+		addIntegerPercent(ss, craftWeaponRule->getBonusStats().avoidBonus2, "avoidBonus2");
 		addIntegerPercent(ss, craftWeaponRule->getBonusStats().powerBonus, "powerBonus");
 		addIntegerPercent(ss, craftWeaponRule->getBonusStats().hitBonus, "hitBonus");
 		addInteger(ss, craftWeaponRule->getBonusStats().fuelMax, "fuelMax");
@@ -3818,7 +3934,25 @@ void StatsForNerdsState::initCraftWeaponList()
 	if (craftWeaponRule->getStandardReload() > 0)
 	{
 		addHeading("_calculatedValues");
+		if (craftWeaponRule->unifiedDamageFormula())
 		{
+			const RuleItem* damageItem = craftWeaponRule->getClipItem() ? craftWeaponRule->getClipItem() : craftWeaponRule->getLauncherItem();
+
+			std::ostringstream ss2;
+			ss2 << damageItem->getDamageType()->getRandomDamage(craftWeaponRule->getDamage(), 1);
+			ss2 << "-";
+			ss2 << damageItem->getDamageType()->getRandomDamage(craftWeaponRule->getDamage(), 2);
+			addSingleString(ss, ss2.str(), "_damageRangeBasic", "", false);
+		}
+		else
+		{
+			// (damage) * (50-100% damage spread), not considering craft `powerBonus`
+			std::ostringstream ss2;
+			ss2 << craftWeaponRule->getDamage() / 2;
+			ss2 << "-";
+			ss2 << craftWeaponRule->getDamage();
+			addSingleString(ss, ss2.str(), "_damageRangeBasic", "", false);
+
 			// (damage / standard reload * 60) * (accuracy / 100) * (50-100% damage spread)
 			int avgDPM = craftWeaponRule->getDamage() * craftWeaponRule->getAccuracy() * 60 * 3 / 4 / craftWeaponRule->getStandardReload() / 100;
 			addInteger(ss, avgDPM, "_averageDPM");
@@ -3826,9 +3960,8 @@ void StatsForNerdsState::initCraftWeaponList()
 			// (damage * ammoMax) * (accuracy / 100) * (50-100% damage spread)
 			int avgTotalDamage = craftWeaponRule->getDamage() * craftWeaponRule->getAmmoMax() * craftWeaponRule->getAccuracy() * 3 / 4 / 100;
 			addInteger(ss, avgTotalDamage, "_averageTotalDamage");
-
-			endHeading();
 		}
+		endHeading();
 	}
 
 	if (_showDebug)
@@ -3837,6 +3970,7 @@ void StatsForNerdsState::initCraftWeaponList()
 
 		addSection("{Naming}", "", _white);
 		addSingleString(ss, craftWeaponRule->getType(), "type");
+		addSingleString(ss, craftWeaponRule->getUfopediaType(), "ufopediaType");
 		addBoolean(ss, craftWeaponRule->getHidePediaInfo(), "hidePediaInfo");
 
 		addSection("{Visuals}", "", _white);
@@ -3858,6 +3992,275 @@ void StatsForNerdsState::initCraftWeaponList()
 		{
 			addSingleString(ss, mod->getModCreatingRule(craftWeaponRule)->name, "createdByMod");
 			addSingleString(ss, mod->getModLastUpdatingRule(craftWeaponRule)->name, "updatedByMod");
+			endHeading();
+		}
+	}
+}
+
+/**
+ * Shows the "raw" RuleSoldier data.
+ */
+void StatsForNerdsState::initSoldierList()
+{
+	_lstRawData->clearList();
+	_lstRawData->setIgnoreSeparators(true);
+
+	std::ostringstream ssTopic;
+	ssTopic << tr(_topicId);
+	if (_showIds)
+	{
+		ssTopic << " [" << _topicId << "]";
+	}
+
+	_txtArticle->setText(tr("STR_ARTICLE").arg(ssTopic.str()));
+
+	Mod* mod = _game->getMod();
+	RuleSoldier* soldierRule = mod->getSoldier(_topicId);
+	if (!soldierRule)
+		return;
+
+	_filterOptions.clear();
+	_cbxRelatedStuff->setVisible(false);
+
+	std::ostringstream ss;
+
+	addBoolean(ss, soldierRule->getAllowPiloting(), "allowPiloting", true);
+
+	addRule(ss, soldierRule->getDefaultArmor(), "armor");
+	addRule(ss, soldierRule->getSpecialWeapon(), "specialWeapon");
+
+	addVectorOfStrings(ss, soldierRule->getRequirements(), "requires");
+	addVectorOfStrings(ss, mod->getBaseFunctionNames(soldierRule->getRequiresBuyBaseFunc()), "requiresBuyBaseFunc");
+	addSingleString(ss, soldierRule->getRequiresBuyCountry(), "requiresBuyCountry");
+
+	addInteger(ss, soldierRule->getBuyCost(), "costBuy", 0, true);
+	addInteger(ss, soldierRule->getMonthlyBuyLimit(), "monthlyBuyLimit");
+
+	int time = soldierRule->getTransferTime();
+	if (time == 0)
+		time = _game->getMod()->getPersonnelTime();
+
+	addInteger(ss, time, "transferTime"); // not raw!
+
+	int baseCost = soldierRule->getSalaryCost(0);
+	addInteger(ss, baseCost, "costSalary", 0, true);
+	addInteger(ss, soldierRule->getSalaryCost(1) - baseCost, "costSalarySquaddie", 0, true);
+	addInteger(ss, soldierRule->getSalaryCost(2) - baseCost, "costSalarySergeant", 0, true);
+	addInteger(ss, soldierRule->getSalaryCost(3) - baseCost, "costSalaryCaptain", 0, true);
+	addInteger(ss, soldierRule->getSalaryCost(4) - baseCost, "costSalaryColonel", 0, true);
+	addInteger(ss, soldierRule->getSalaryCost(5) - baseCost, "costSalaryCommander", 0, true);
+
+	if (_showDebug)
+	{
+		addSection("{Modding section}", "You don't need this info as a player", _white, true);
+
+		addSection("{Naming}", "", _white);
+		addSingleString(ss, soldierRule->getType(), "type");
+		addBoolean(ss, soldierRule->getShowTypeInInventory(), "showTypeInInventory");
+		addInteger(ss, soldierRule->getNames().size(), "soldierNames*"); // size only
+		addInteger(ss, soldierRule->getFemaleFrequency(), "femaleFrequency", 50);
+		addInteger(ss, soldierRule->getStatStrings().size(), "statStrings*"); // size only
+
+		addInteger(ss, soldierRule->getRankStrings().size(), "rankStrings*"); // size only
+		addBoolean(ss, soldierRule->getAllowPromotion(), "allowPromotion", true);
+
+		addSingleString(ss, soldierRule->getMonthlyBuyLimitMessage(), "monthlyBuyLimitMessage");
+
+		addSection("{Stats}", "", _white);
+		addBoolean(ss, !soldierRule->getSpawnedSoldierTemplate().yaml.empty(), "spawnedSoldier*"); // just say if there are any or not
+
+		addInteger(ss, soldierRule->getStandHeight(), "standHeight");
+		addInteger(ss, soldierRule->getKneelHeight(), "kneelHeight");
+		addInteger(ss, soldierRule->getFloatHeight(), "floatHeight");
+		addInteger(ss, soldierRule->getMoraleLossWhenKilled(), "moraleLossWhenKilled", 100);
+		addInteger(ss, soldierRule->getValue(), "value", 20);
+
+		addUnitStatBonus(ss, soldierRule->getMinStats(), "minStats");
+		addUnitStatBonus(ss, soldierRule->getMaxStats(), "maxStats");
+		addUnitStatBonus(ss, soldierRule->getStatCaps(), "statCaps");
+		addUnitStatBonus(ss, soldierRule->getTrainingStatCaps(), "trainingStatCaps");
+
+		addUnitStatBonus(ss, soldierRule->getDogfightExperience(), "dogfightExperience");
+
+		addSection("{Other}", "", _white);
+		addInteger(ss, soldierRule->getGroup(), "group");
+		addInteger(ss, soldierRule->getSkills().size(), "skills*"); // size only
+
+		addSection("{Visuals}", "", _white);
+		addRule(ss, soldierRule->getDefaultArmor(), "armorForAvatar");
+		addInteger(ss, soldierRule->getAvatarOffsetX(), "avatarOffsetX", 67);
+		addInteger(ss, soldierRule->getAvatarOffsetY(), "avatarOffsetY", 48);
+		addInteger(ss, soldierRule->getFlagOffset(), "flagOffset");
+
+		addInteger(ss, soldierRule->getRankSprite(), "rankSprite", 42);
+		addSpriteResourcePath(ss, mod, "BASEBITS.PCK", soldierRule->getRankSprite());
+		addInteger(ss, soldierRule->getRankSpriteBattlescape(), "rankBattleSprite", 20);
+		addSpriteResourcePath(ss, mod, "SMOKE.PCK", soldierRule->getRankSpriteBattlescape());
+		addInteger(ss, soldierRule->getRankSpriteTiny(), "rankTinySprite", -1); // always show
+		addSpriteResourcePath(ss, mod, "TinyRanks", soldierRule->getRankSpriteTiny());
+		addInteger(ss, soldierRule->getSkillIconSprite(), "skillIconSprite", 1);
+		addSpriteResourcePath(ss, mod, "SPICONS.DAT", soldierRule->getSkillIconSprite());
+
+		addSection("{Sounds}", "", _white);
+		addVectorOfIntegers(ss, soldierRule->getMaleDeathSounds(), "deathMale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getMaleDeathSounds());
+		addVectorOfIntegers(ss, soldierRule->getFemaleDeathSounds(), "deathFemale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getFemaleDeathSounds());
+		addVectorOfIntegers(ss, soldierRule->getMaleSelectUnitSounds(), "selectUnitMale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getMaleSelectUnitSounds());
+		addVectorOfIntegers(ss, soldierRule->getFemaleSelectUnitSounds(), "selectUnitFemale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getFemaleSelectUnitSounds());
+		addVectorOfIntegers(ss, soldierRule->getMaleStartMovingSounds(), "startMovingMale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getMaleStartMovingSounds());
+		addVectorOfIntegers(ss, soldierRule->getFemaleStartMovingSounds(), "startMovingFemale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getFemaleStartMovingSounds());
+		addVectorOfIntegers(ss, soldierRule->getMaleSelectWeaponSounds(), "selectWeaponMale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getMaleSelectWeaponSounds());
+		addVectorOfIntegers(ss, soldierRule->getFemaleSelectWeaponSounds(), "selectWeaponFemale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getFemaleSelectWeaponSounds());
+		addVectorOfIntegers(ss, soldierRule->getMaleAnnoyedSounds(), "annoyedMale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getMaleAnnoyedSounds());
+		addVectorOfIntegers(ss, soldierRule->getFemaleAnnoyedSounds(), "annoyedFemale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getFemaleAnnoyedSounds());
+		addVectorOfIntegers(ss, soldierRule->getMalePanicSounds(), "panicMale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getMalePanicSounds());
+		addVectorOfIntegers(ss, soldierRule->getFemalePanicSounds(), "panicFemale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getFemalePanicSounds());
+		addVectorOfIntegers(ss, soldierRule->getMaleBerserkSounds(), "berserkMale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getMaleBerserkSounds());
+		addVectorOfIntegers(ss, soldierRule->getFemaleBerserkSounds(), "berserkFemale");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", soldierRule->getFemaleBerserkSounds());
+
+		addSection("{Mod info}", "", _white);
+		{
+			addSingleString(ss, mod->getModCreatingRule(soldierRule)->name, "createdByMod");
+			addSingleString(ss, mod->getModLastUpdatingRule(soldierRule)->name, "updatedByMod");
+			endHeading();
+		}
+	}
+}
+
+/**
+ * Shows the "raw" Unit/RuleUnit data.
+ */
+void StatsForNerdsState::initUnitList()
+{
+	_lstRawData->clearList();
+	_lstRawData->setIgnoreSeparators(true);
+
+	std::ostringstream ssTopic;
+	ssTopic << tr(_topicId);
+	if (_showIds)
+	{
+		ssTopic << " [" << _topicId << "]";
+	}
+
+	_txtArticle->setText(tr("STR_ARTICLE").arg(ssTopic.str()));
+
+	Mod* mod = _game->getMod();
+	Unit* unitRule = mod->getUnit(_topicId);
+	if (!unitRule)
+		return;
+
+	_filterOptions.clear();
+	_cbxRelatedStuff->setVisible(false);
+
+	std::ostringstream ss;
+
+	addSingleString(ss, unitRule->getRace(), "race");
+	addSingleString(ss, unitRule->getRank(), "rank");
+
+	addRule(ss, unitRule->getArmor(), "armor");
+	addSpecialAbility(ss, (SpecialAbility)unitRule->getSpecialAbility(), "specab");
+	addBoolean(ss, unitRule->isLivingWeapon(), "livingWeapon");
+	addSingleString(ss, unitRule->getMeleeWeapon(), "meleeWeapon");
+	addSingleString(ss, unitRule->getPsiWeapon(), "psiWeapon", "ALIEN_PSI_WEAPON");
+
+	addBoolean(ss, !unitRule->getBuiltInWeapons().empty(), "_builtInWeaponSets"); // just say if there are any or not
+	addBoolean(ss, !unitRule->getWeightedBuiltInWeapons().empty(), "_weightedBuiltInWeaponSets"); // just say if there are any or not
+
+	addRule(ss, unitRule->getSpawnUnit(), "spawnUnit");
+
+	bool capturableTotal = unitRule->getCapturable() && unitRule->getArmor()->getCorpseBattlescape().front()->isRecoverable() && !unitRule->getSpawnUnit();
+	addBoolean(ss, capturableTotal, "_capturable", true);
+
+	addBoolean(ss, unitRule->getCapturable(), "capturable", true);
+	addBoolean(ss, unitRule->canSurrender(), "canSurrender", false);
+	addBoolean(ss, unitRule->autoSurrender(), "autoSurrender", false);
+
+	addInteger(ss, unitRule->getSpotterDuration(), "spotter"); // not raw!
+	addInteger(ss, unitRule->getSniperPercentage(), "sniper");
+
+	if (_showDebug)
+	{
+		addSection("{Modding section}", "You don't need this info as a player", _white, true);
+
+		addSection("{Naming}", "", _white);
+		addSingleString(ss, unitRule->getType(), "type");
+		addRule(ss, unitRule->getLiveAlienGeoscape(), "liveAlien");
+		addInteger(ss, unitRule->getShowFullNameInAlienInventory(mod), "showFullNameInAlienInventory"); // not raw!
+
+		addSection("{Stats}", "", _white);
+		addInteger(ss, unitRule->getStandHeight(), "standHeight");
+		addInteger(ss, unitRule->getKneelHeight(), "kneelHeight");
+		addInteger(ss, unitRule->getFloatHeight(), "floatHeight");
+		addInteger(ss, unitRule->getMoraleLossWhenKilled(), "moraleLossWhenKilled", 100);
+		addInteger(ss, unitRule->getBerserkChance(), "berserkChance", -1);
+		addInteger(ss, unitRule->getEnergyRecovery(), "energyRecovery", 30);
+
+		addUnitStatBonus(ss, *unitRule->getStats(), "stats");
+
+		addSection("{Flags}", "", _white);
+		addBoolean(ss, unitRule->canPanic(), "canPanic", true);
+		addBoolean(ss, unitRule->canBeMindControlled(), "canBeMindControlled", true);
+		addBoolean(ss, unitRule->isIgnoredByAI(), "ignoredByAI", false);
+		addBoolean(ss, unitRule->isCosmetic(), "cosmetic");
+		addBoolean(ss, unitRule->isVIP(), "vip");
+
+		addSection("{AI}", "", _white);
+		addInteger(ss, unitRule->getIntelligence(), "intelligence");
+		addInteger(ss, unitRule->getAggression(), "aggression");
+		addInteger(ss, unitRule->getPickUpWeaponsMoreActively(), "pickUpWeaponsMoreActively", -1);
+		addBoolean(ss, unitRule->isLeeroyJenkins(), "isLeeroyJenkins");
+		addBoolean(ss, unitRule->avoidsFire(), "avoidsFire", true); // default "_specab < SPECAB_BURNFLOOR"
+		addBoolean(ss, unitRule->waitIfOutsideWeaponRange(), "waitIfOutsideWeaponRange");
+
+		addSection("{Debriefing}", "", _white);
+		addInteger(ss, unitRule->getValue(), "value", 0);
+		addBoolean(ss, unitRule->isRecoverableAsCivilian(), "civilianRecoveryType*"); // just say if there are any or not
+		addBoolean(ss, unitRule->isRecoverableAsScientist(), "_recoverScientist");
+		addBoolean(ss, unitRule->isRecoverableAsEngineer(), "_recoverEngineer");
+		addRule(ss, unitRule->getCivilianRecoveryItemType(), "_recoverItem");
+		addRule(ss, unitRule->getCivilianRecoverySoldierType(), "_recoverSoldier");
+		addSingleString(ss, unitRule->getSpawnedPersonName(), "spawnedPersonName");
+		addBoolean(ss, !unitRule->getSpawnedSoldierTemplate().yaml.empty(), "spawnedSoldier*"); // just say if there are any or not
+
+		addSection("{Sounds}", "", _white);
+		addInteger(ss, unitRule->getMoveSound(), "moveSound", -1);
+		std::vector<int> tmpSoundVector;
+		tmpSoundVector.push_back(unitRule->getMoveSound());
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", tmpSoundVector);
+		addVectorOfIntegers(ss, unitRule->getDeathSounds(), "deathSound");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", unitRule->getDeathSounds());
+		addVectorOfIntegers(ss, unitRule->getSelectUnitSounds(), "selectUnitSound");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", unitRule->getSelectUnitSounds());
+		addVectorOfIntegers(ss, unitRule->getStartMovingSounds(), "startMovingSound");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", unitRule->getStartMovingSounds());
+		addVectorOfIntegers(ss, unitRule->getSelectWeaponSounds(), "selectWeaponSound");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", unitRule->getSelectWeaponSounds());
+		addVectorOfIntegers(ss, unitRule->getAnnoyedSounds(), "annoyedSound");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", unitRule->getAnnoyedSounds());
+		addVectorOfIntegers(ss, unitRule->getPanicSounds(), "panicSound");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", unitRule->getPanicSounds());
+		addVectorOfIntegers(ss, unitRule->getBerserkSounds(), "berserkSound");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", unitRule->getBerserkSounds());
+		addVectorOfIntegers(ss, unitRule->getAggroSounds(), "aggroSound");
+		addSoundVectorResourcePaths(ss, mod, "BATTLE.CAT", unitRule->getAggroSounds());
+
+		addSection("{Mod info}", "", _white);
+		{
+			addSingleString(ss, mod->getModCreatingRule(unitRule)->name, "createdByMod");
+			addSingleString(ss, mod->getModLastUpdatingRule(unitRule)->name, "updatedByMod");
 			endHeading();
 		}
 	}

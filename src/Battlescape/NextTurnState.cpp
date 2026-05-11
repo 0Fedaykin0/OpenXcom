@@ -84,6 +84,16 @@ NextTurnState::NextTurnState(SavedBattleGame *battleGame, BattlescapeState *stat
 		}
 	}
 
+	// reset alien/civilian quick mode
+	if (_battleGame->getSide() == FACTION_PLAYER)
+	{
+		if (Options::battleAlienSpeedOrig != -1)
+		{
+			Options::battleAlienSpeed = Options::battleAlienSpeedOrig;
+			Options::battleAlienSpeedOrig = -1;
+		}
+	}
+
 	_currentTurn = _battleGame->getTurn() < 1 ? 1 : _battleGame->getTurn();
 
 	// Create objects
@@ -163,7 +173,7 @@ NextTurnState::NextTurnState(SavedBattleGame *battleGame, BattlescapeState *stat
 	_txtTitle->setBig();
 	_txtTitle->setAlign(ALIGN_CENTER);
 	_txtTitle->setHighContrast(true);
-	_txtTitle->setText(tr("STR_OPENXCOM"));
+	_txtTitle->setText(tr("STR_OPENXCOM").arg(Options::getActiveMasterInfo()->getVersionDisplay()));
 
 
 	_txtTurn->setBig();

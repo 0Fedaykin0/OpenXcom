@@ -336,9 +336,9 @@ void Text::processText()
 			// Add line measurements for alignment later
 			_lineWidth.push_back(width);
 			_lineHeight.push_back(font->getCharSize('\n').h);
+			start = true;
 			width = 0;
 			word = 0;
-			start = true;
 
 			if (c == str.size())
 				break;
@@ -354,9 +354,20 @@ void Text::processText()
 				textIndentation++;
 			}
 			space = c;
+			start = start && (word == 0); // consider initial spaces still as start of line until first character is met
 			width += font->getCharSize(str[c]).w;
 			word = 0;
-			start = false;
+		}
+		// Custom format, skip 3 next chars
+		else if (str[c] == Unicode::TOK_CUSTOM_FORMAT)
+		{
+			if (c + 3u > str.size())
+			{
+				str.resize(c + 3u); // add missing character
+				str[c + 1u] = '\0';
+				str[c + 2u] = '\0';
+			}
+			c += 2u;
 		}
 		// Keep track of the width of the last line and word
 		else if (str[c] != Unicode::TOK_COLOR_FLIP)
@@ -513,6 +524,7 @@ void Text::draw()
 	int x = 0, y = 0, line = 0, height = 0;
 	Font *font = _font;
 	int color = _color;
+	bool isAltColor = false;
 	const UString &s = _processedText;
 
 	height = getTextHeight();
@@ -575,7 +587,46 @@ void Text::draw()
 		}
 		else if (*c == Unicode::TOK_COLOR_FLIP)
 		{
-			color = (color == _color ? _color2 : _color);
+			if (isAltColor == false)
+			{
+				color = _color2;
+				isAltColor = true;
+			}
+			else
+			{
+				color = _color;
+				isAltColor = false;
+			}
+		}
+		else if (*c == Unicode::TOK_CUSTOM_FORMAT)
+		{
+			const auto op = *(c + 1u);
+			const auto arg = *(c + 2u);
+			switch (op)
+			{
+				case 'C': // custom color like "\eC\x45"
+					color = arg;
+					isAltColor = false;
+					break;
+
+				case 'c': // specific color like "\ecP" - primary, "\ecS" - secondary
+					if (arg == 'P')
+					{
+						color = _color;
+						isAltColor = false;
+					}
+					else if (arg == 'S')
+					{
+						color = _color2;
+						isAltColor = true;
+					}
+					break;
+
+				default:
+					// nothing
+					break;
+			}
+			c += 2;
 		}
 		else
 		{

@@ -60,7 +60,9 @@ enum ScaleType
 	SCALE_SCREEN,
 	SCALE_SCREEN_DIV_4,
 	SCALE_SCREEN_DIV_5,
-	SCALE_SCREEN_DIV_6
+	SCALE_SCREEN_DIV_6,
+	SCALE_SCREEN_DIV_8,
+	SCALE_SCREEN_DIV_10
 };
 /**
  * Container for all the various global game options
@@ -90,7 +92,7 @@ namespace Options
 	/// Loads options from YAML.
 	bool load(const std::string &filename = "options");
 	/// Saves options to YAML.
-	bool save(const std::string &filename = "options");
+	bool save(bool reset = false, const std::string &filename = "options");
 	/// Gets the game's data folder.
 	std::string getDataFolder();
 	/// Sets the game's data folder.

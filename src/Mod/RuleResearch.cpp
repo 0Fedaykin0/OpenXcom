@@ -25,7 +25,10 @@
 namespace OpenXcom
 {
 
-RuleResearch::RuleResearch(const std::string &name, int listOrder) : _name(name), _spawnedItemCount(1), _cost(0), _points(0), _sequentialGetOneFree(false), _needItem(false), _destroyItem(false), _unlockFinalMission(false), _listOrder(listOrder)
+RuleResearch::RuleResearch(const std::string &name, int listOrder) :
+	_name(name), _spawnedItemCount(1), _cost(0), _points(0),
+	_sequentialGetOneFree(false), _needItem(false), _destroyItem(false), _unlockFinalMission(false), _repeatable(false),
+	_listOrder(listOrder)
 {
 }
 
@@ -34,43 +37,46 @@ RuleResearch::RuleResearch(const std::string &name, int listOrder) : _name(name)
  * @param node YAML node.
  * @param listOrder The list weight for this research.
  */
-void RuleResearch::load(const YAML::Node &node, Mod* mod, const ModScript& parsers)
+void RuleResearch::load(const YAML::YamlNodeReader& node, Mod* mod, const ModScript& parsers)
 {
-	if (const YAML::Node &parent = node["refNode"])
+	const auto& reader = node.useIndex();
+	if (const auto& parent = reader["refNode"])
 	{
 		load(parent, mod, parsers);
 	}
 
-	_lookup = node["lookup"].as<std::string>(_lookup);
-	_cutscene = node["cutscene"].as<std::string>(_cutscene);
-	_spawnedItem = node["spawnedItem"].as<std::string>(_spawnedItem);
-	_spawnedItemCount = node["spawnedItemCount"].as<int>(_spawnedItemCount);
-	mod->loadUnorderedNames(_name, _spawnedItemList, node["spawnedItemList"]);
-	mod->loadUnorderedNames(_name, _decreaseCounter, node["decreaseCounter"]);
-	mod->loadUnorderedNames(_name, _increaseCounter, node["increaseCounter"]);
-	_spawnedEvent = node["spawnedEvent"].as<std::string>(_spawnedEvent);
-	_cost = node["cost"].as<int>(_cost);
-	_points = node["points"].as<int>(_points);
-	mod->loadUnorderedNames(_name, _dependenciesName, node["dependencies"]);
-	mod->loadUnorderedNames(_name, _unlocksName, node["unlocks"]);
-	mod->loadUnorderedNames(_name, _disablesName, node["disables"]);
-	mod->loadUnorderedNames(_name, _reenablesName, node["reenables"]);
-	mod->loadUnorderedNames(_name, _getOneFreeName, node["getOneFree"]);
-	mod->loadUnorderedNames(_name, _requiresName, node["requires"]);
-	mod->loadBaseFunction(_name, _requiresBaseFunc, node["requiresBaseFunc"]);
-	_sequentialGetOneFree = node["sequentialGetOneFree"].as<bool>(_sequentialGetOneFree);
-	mod->loadNamesToNames(_name, _getOneFreeProtectedName, node["getOneFreeProtected"]);
-	mod->loadNameNull(_name, _neededItemName, node["neededItem"]);
-	_needItem = node["needItem"].as<bool>(_needItem);
-	_destroyItem = node["destroyItem"].as<bool>(_destroyItem);
-	_unlockFinalMission = node["unlockFinalMission"].as<bool>(_unlockFinalMission);
-	_listOrder = node["listOrder"].as<int>(_listOrder);
-	// This is necessary, research code assumes it!
-	if (!_requiresName.empty() && _cost != 0)
+	reader.tryRead("lookup", _lookupName);
+	reader.tryRead("cutscene", _cutscene);
+	reader.tryRead("spawnedItem", _spawnedItem);
+	reader.tryRead("spawnedItemCount", _spawnedItemCount);
+	mod->loadUnorderedNames(_name, _spawnedItemList, reader["spawnedItemList"]);
+	mod->loadUnorderedNames(_name, _decreaseCounter, reader["decreaseCounter"]);
+	mod->loadUnorderedNames(_name, _increaseCounter, reader["increaseCounter"]);
+	reader.tryRead("spawnedEvent", _spawnedEvent);
+	if (reader["events"])
 	{
-		throw Exception("Research topic " + _name + " has requirements, but the cost is not zero. Sorry, this is not allowed!");
+		_events.load(reader["events"]);
 	}
-	_scriptValues.load(node, parsers.getShared());
+	reader.tryRead("cost", _cost);
+	reader.tryRead("points", _points);
+	mod->loadUnorderedNames(_name, _dependenciesName, reader["dependencies"]);
+	mod->loadUnorderedNames(_name, _unlocksName, reader["unlocks"]);
+	mod->loadUnorderedNames(_name, _disablesName, reader["disables"]);
+	mod->loadUnorderedNames(_name, _reenablesName, reader["reenables"]);
+	mod->loadUnorderedNames(_name, _getOneFreeName, reader["getOneFree"]);
+	mod->loadUnorderedNames(_name, _requiresName, reader["requires"]);
+	mod->loadBaseFunction(_name, _requiresBaseFunc, reader["requiresBaseFunc"]);
+	reader.tryRead("sequentialGetOneFree", _sequentialGetOneFree);
+	mod->loadNamesToNames(_name, _getOneFreeProtectedName, reader["getOneFreeProtected"]);
+	mod->loadNameNull(_name, _neededItemName, reader["neededItem"]);
+	reader.tryRead("needItem", _needItem);
+	reader.tryRead("destroyItem", _destroyItem);
+	reader.tryRead("returnsItem", _returnsItem);
+	reader.tryRead("unlockFinalMission", _unlockFinalMission);
+	reader.tryRead("repeatable", _repeatable);
+	reader.tryRead("listOrder", _listOrder);
+
+	_scriptValues.load(reader, parsers.getShared());
 }
 
 /**
@@ -78,23 +84,36 @@ void RuleResearch::load(const YAML::Node &node, Mod* mod, const ModScript& parse
  */
 void RuleResearch::afterLoad(const Mod* mod)
 {
-	if (_lookup == _name)
+	// This is necessary, research code assumes it!
+	if (!_requiresName.empty() && _cost != 0)
 	{
-		_lookup = "";
+		throw Exception("Research topic " + _name + " has requirements, but the cost is not zero. Sorry, this is not allowed!");
 	}
+
+	if (_lookupName == _name)
+	{
+		_lookupName = "";
+	}
+	mod->linkRule(_lookup, _lookupName);
+
 
 	if (_needItem)
 	{
 		// FIXME: this would break all mods unfortunately, maybe one day...
 		//mod->linkRule(_neededItem, _neededItemName.empty() ? _name : _neededItemName);
 
+		const auto* linkedByName = mod->getItem(_name, false); // false, because even vanilla ruleset is a mess
 		if (_neededItemName.empty())
 		{
-			_neededItem = mod->getItem(_name, false); // false, because even vanilla ruleset is a mess
+			_neededItem = linkedByName;
 		}
 		else
 		{
 			_neededItem = mod->getItem(_neededItemName, true);
+		}
+		if (_neededItem && linkedByName && linkedByName != _neededItem)
+		{
+			throw LoadRuleException(_name, "Conflict between researched item '" + _name + "' and needed item '" + _neededItemName + "'");
 		}
 	}
 
@@ -238,15 +257,6 @@ const std::vector<std::pair<const RuleResearch*, std::vector<const RuleResearch*
 }
 
 /**
- * Gets what article to look up in the ufopedia.
- * @return The article to look up in the ufopaedia
- */
-const std::string &RuleResearch::getLookup() const
-{
-	return _lookup;
-}
-
-/**
  * Gets the requirements for this ResearchProject.
  * @return The requirement for this research.
  */
@@ -318,6 +328,8 @@ void RuleResearch::ScriptRegister(ScriptParserBase* parser)
 
 	ar.add<&RuleResearch::getCost>("getCost");
 	ar.add<&RuleResearch::getPoints>("getPoints");
+	ar.add<&RuleResearch::getLookup>("getLookup");
+	ar.add<&RuleResearch::getNeededItem>("getNeededItem");
 
 	ar.addScriptValue<BindBase::OnlyGet, &RuleResearch::_scriptValues>();
 	ar.addDebugDisplay<&debugDisplayScript>();

@@ -19,7 +19,7 @@
  */
 #include <string>
 #include <vector>
-#include <yaml-cpp/yaml.h>
+#include "../Engine/Yaml.h"
 #include "../Engine/Exception.h"
 
 namespace OpenXcom
@@ -43,7 +43,9 @@ namespace OpenXcom
 		UFOPAEDIA_TYPE_TFTD_ITEM          = 14,
 		UFOPAEDIA_TYPE_TFTD_ARMOR         = 15,
 		UFOPAEDIA_TYPE_TFTD_BASE_FACILITY = 16,
-		UFOPAEDIA_TYPE_TFTD_USO           = 17
+		UFOPAEDIA_TYPE_TFTD_USO           = 17,
+		UFOPAEDIA_TYPE_SOLDIER            = 18,
+		UFOPAEDIA_TYPE_UNIT               = 19
 	};
 
 	/**
@@ -77,7 +79,7 @@ namespace OpenXcom
 		/// Gets the type of article definition.
 		UfopaediaTypeId getType() const;
 		/// Loads the article from YAML.
-		virtual void load(const YAML::Node& node, int listOrder);
+		virtual void load(const YAML::YamlNodeReader& reader, int listOrder);
 		/// Gets the article's list weight.
 		int getListOrder() const;
 
@@ -162,6 +164,45 @@ namespace OpenXcom
 	};
 
 	/**
+	 * ArticleDefinitionUnit defines articles for unit types, e.g. STR_SECTOID_LEADER.
+	 * They have a large background image, a stats block, an armor block and a description positioned differently.
+	 */
+
+	class ArticleDefinitionUnit : public ArticleDefinition
+	{
+	public:
+		/// Constructor.
+		ArticleDefinitionUnit();
+		/// Loads the article from YAML.
+		void load(const YAML::YamlNodeReader& reader, int listOrder) override;
+
+		int unit_mode;
+		std::string image_id;
+		ArticleDefinitionRect rect_stats;
+		ArticleDefinitionRect rect_armor;
+		ArticleDefinitionRect rect_text;
+	};
+
+	/**
+	 * ArticleDefinitionSoldier defines articles for soldier types, e.g. STR_SOLDIER.
+	 * They have a large background image, a stats block and a description positioned differently.
+	 */
+
+	class ArticleDefinitionSoldier : public ArticleDefinition
+	{
+	public:
+		/// Constructor.
+		ArticleDefinitionSoldier();
+		/// Loads the article from YAML.
+		void load(const YAML::YamlNodeReader& reader, int listOrder) override;
+
+		int psi_skill_mode;
+		std::string image_id;
+		ArticleDefinitionRect rect_stats;
+		ArticleDefinitionRect rect_text;
+	};
+
+	/**
 	 * ArticleDefinitionCraft defines articles for craft, e.g. SKYRANGER.
 	 * They have a large background image, a stats block and a description positioned differently.
 	 */
@@ -172,7 +213,7 @@ namespace OpenXcom
 		/// Constructor.
 		ArticleDefinitionCraft();
 		/// Loads the article from YAML.
-		void load(const YAML::Node& node, int listOrder) override;
+		void load(const YAML::YamlNodeReader& reader, int listOrder) override;
 
 		std::string image_id;
 		ArticleDefinitionRect rect_stats;
@@ -190,7 +231,7 @@ namespace OpenXcom
 		/// Constructor.
 		ArticleDefinitionCraftWeapon();
 		/// Loads the article from YAML.
-		void load(const YAML::Node& node, int listOrder) override;
+		void load(const YAML::YamlNodeReader& reader, int listOrder) override;
 
 		std::string image_id;
 	};
@@ -205,7 +246,7 @@ namespace OpenXcom
 		/// Constructor.
 		ArticleDefinitionText();
 		/// Loads the article from YAML.
-		void load(const YAML::Node& node, int listOrder) override;
+		void load(const YAML::YamlNodeReader& reader, int listOrder) override;
 
 	};
 
@@ -220,7 +261,7 @@ namespace OpenXcom
 		/// Constructor.
 		ArticleDefinitionTextImage();
 		/// Loads the article from YAML.
-		void load(const YAML::Node& node, int listOrder) override;
+		void load(const YAML::YamlNodeReader& reader, int listOrder) override;
 
 		std::string image_id;
 		int text_width;
@@ -239,7 +280,7 @@ namespace OpenXcom
 		/// Constructor.
 		ArticleDefinitionTFTD();
 		/// Loads the article from YAML.
-		void load(const YAML::Node& node, int listOrder) override;
+		void load(const YAML::YamlNodeReader& reader, int listOrder) override;
 
 		std::string image_id;
 		int text_width;
@@ -257,7 +298,7 @@ namespace OpenXcom
 		/// Constructor.
 		ArticleDefinitionBaseFacility();
 		/// Loads the article from YAML.
-		void load(const YAML::Node& node, int listOrder) override;
+		void load(const YAML::YamlNodeReader& reader, int listOrder) override;
 
 	};
 
@@ -272,7 +313,7 @@ namespace OpenXcom
 		/// Constructor.
 		ArticleDefinitionItem();
 		/// Loads the article from YAML.
-		void load(const YAML::Node& node, int listOrder) override;
+		void load(const YAML::YamlNodeReader& reader, int listOrder) override;
 
 		std::string weapon;
 	};
@@ -288,7 +329,7 @@ namespace OpenXcom
 		/// Constructor.
 		ArticleDefinitionUfo();
 		/// Loads the article from YAML.
-		void load(const YAML::Node& node, int listOrder) override;
+		void load(const YAML::YamlNodeReader& reader, int listOrder) override;
 
 	};
 
@@ -303,7 +344,7 @@ namespace OpenXcom
 		/// Constructor.
 		ArticleDefinitionArmor();
 		/// Loads the article from YAML.
-		void load(const YAML::Node& node, int listOrder) override;
+		void load(const YAML::YamlNodeReader& reader, int listOrder) override;
 
 		std::string image_id;
 	};
@@ -319,10 +360,12 @@ namespace OpenXcom
 		/// Constructor.
 		ArticleDefinitionVehicle();
 		/// Loads the article from YAML.
-		void load(const YAML::Node& node, int listOrder) override;
+		void load(const YAML::YamlNodeReader& reader, int listOrder) override;
 
 		std::string image_id;
 		std::string weapon;
 	};
 
+	// helper overloads for deserialization-only
+	bool read(ryml::ConstNodeRef const& n, ArticleDefinitionRect* val);
 }

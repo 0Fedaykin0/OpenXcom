@@ -61,6 +61,10 @@ enum BlockEnum
 	BlockLoop,
 };
 
+/**
+ * Size in bytes of operation id
+ */
+constexpr size_t ProcOpSize = sizeof(Uint8);
 
 /**
  * Helper structure used by ScriptParser::parse
@@ -295,7 +299,7 @@ struct SumListIndexImpl<MaxSize, T1, T...> : SumListIndexImpl<MaxSize, T...>
 
 	static constexpr ScriptFunc getDynamic(int i)
 	{
-		return tag::value == i ? T1::func : SumListIndexImpl<MaxSize, T...>::getDynamic(i);
+		return tag::value == i ? T1::funcDynamic : SumListIndexImpl<MaxSize, T...>::getDynamic(i);
 	}
 };
 
@@ -307,15 +311,21 @@ struct SumListIndexImpl<MaxSize>
 		static constexpr int offset = 0;
 
 		[[gnu::always_inline]]
-		static RetEnum func(ScriptWorkerBase &, const Uint8 *, ProgPos &)
+		static RetEnum funcDynamic(ScriptWorkerBase &, const Uint8 *, ProgPos &)
 		{
 			return RetError;
+		}
+
+		[[gnu::always_inline]]
+		static void funcDirect(ScriptWorkerBase &, const Uint8 *, ProgPos& curr)
+		{
+			curr = static_cast<ProgPos>(RetError);
 		}
 	};
 	static End typeFunc(...);
 	static constexpr ScriptFunc getDynamic(int i)
 	{
-		return End::func;
+		return End::funcDynamic;
 	}
 };
 
@@ -938,16 +948,34 @@ struct FuncVer<Func, Ver, ListTag<Pos...>>
 
 	template<int CurrPos>
 	[[gnu::always_inline]]
-	static typename GetTypeAt<CurrPos>::ReturnType get(ScriptWorkerBase& sw, const Uint8* procArgs, ProgPos& curr)
+	static typename GetTypeAt<CurrPos>::ReturnType getArgForDynamic(ScriptWorkerBase& sw, const Uint8* procArgs, ProgPos& curr)
 	{
 		constexpr int offs = Args::offset(Ver, CurrPos);
 		return GetTypeAt<CurrPos>::get(sw, procArgs + offs, curr);
 	}
 
+	template<int CurrPos>
 	[[gnu::always_inline]]
-	static RetEnum func(ScriptWorkerBase& sw, const Uint8* procArgs, ProgPos& curr)
+	static typename GetTypeAt<CurrPos>::ReturnType getArgForDirect(ScriptWorkerBase& sw, const Uint8* procArgs, ProgPos& curr)
 	{
-		return Func::func(get<Pos>(sw, procArgs, curr)...);
+		constexpr int offs = Args::offset(Ver, CurrPos) + ProcOpSize;
+		return GetTypeAt<CurrPos>::get(sw, procArgs + offs, curr);
+	}
+
+	[[gnu::always_inline]]
+	static RetEnum funcDynamic(ScriptWorkerBase& sw, const Uint8* procArgs, ProgPos& curr)
+	{
+		return Func::func(getArgForDynamic<Pos>(sw, procArgs, curr)...);
+	}
+
+	[[gnu::always_inline]]
+	static void funcDirect(ScriptWorkerBase& sw, const Uint8* procArgs, ProgPos& curr)
+	{
+		const RetEnum ret = Func::func(getArgForDirect<Pos>(sw, procArgs, curr)...);
+		if (ret != RetEnum::RetContinue)
+		{
+			curr = static_cast<ProgPos>(ret);
+		}
 	}
 };
 
@@ -1580,21 +1608,21 @@ struct Bind : BindBase
 
 
 	template<auto MemPtr0, auto... MemPtrR>
-	void addField(const std::string& get)
+	void addField(const std::string& getFuncName)
 	{
-		addCustomFunc<helper::BindPropGet<T, MACRO_CLANG_AUTO_HACK(MemPtr0), MACRO_CLANG_AUTO_HACK(MemPtrR)...>>(getName(get), "Get field of " + prefix);
+		addCustomFunc<helper::BindPropGet<T, MACRO_CLANG_AUTO_HACK(MemPtr0), MACRO_CLANG_AUTO_HACK(MemPtrR)...>>(getName(getFuncName), "Get field of " + prefix);
 	}
 	template<auto MemPtr0, auto... MemPtrR>
-	void addField(const std::string& get, const std::string& set)
+	void addField(const std::string& getFuncName, const std::string& setFuncName)
 	{
-		addField<MemPtr0, MemPtrR...>(get);
-		addCustomFunc<helper::BindPropSet<T, MACRO_CLANG_AUTO_HACK(MemPtr0), MACRO_CLANG_AUTO_HACK(MemPtrR)...>>(getName(set), "Set field of " + prefix);
+		addField<MemPtr0, MemPtrR...>(getFuncName);
+		addCustomFunc<helper::BindPropSet<T, MACRO_CLANG_AUTO_HACK(MemPtr0), MACRO_CLANG_AUTO_HACK(MemPtrR)...>>(getName(setFuncName), "Set field of " + prefix);
 	}
 	template<auto MemPtr0, auto... MemPtrR>
-	void addField(const std::string& get, const std::string& set, const std::string& add)
+	void addField(const std::string& getFuncName, const std::string& setFuncName, const std::string& addFuncName)
 	{
-		addField<MemPtr0, MemPtrR...>(get, set);
-		addCustomFunc<helper::BindPropAdd<T, MACRO_CLANG_AUTO_HACK(MemPtr0), MACRO_CLANG_AUTO_HACK(MemPtrR)...>>(getName(add), "Add to field of " + prefix);
+		addField<MemPtr0, MemPtrR...>(getFuncName, setFuncName);
+		addCustomFunc<helper::BindPropAdd<T, MACRO_CLANG_AUTO_HACK(MemPtr0), MACRO_CLANG_AUTO_HACK(MemPtrR)...>>(getName(addFuncName), "Add to field of " + prefix);
 	}
 
 
@@ -1750,21 +1778,21 @@ struct BindValue : BindBase
 
 
 	template<auto MemPtr0, auto... MemPtrR>
-	void addField(const std::string& get)
+	void addField(const std::string& getFuncName)
 	{
-		addCustomFunc<helper::BindValuePropGet<T, MACRO_CLANG_AUTO_HACK(MemPtr0), MACRO_CLANG_AUTO_HACK(MemPtrR)...>>(getName(get), "Get field of " + prefix);
+		addCustomFunc<helper::BindValuePropGet<T, MACRO_CLANG_AUTO_HACK(MemPtr0), MACRO_CLANG_AUTO_HACK(MemPtrR)...>>(getName(getFuncName), "Get field of " + prefix);
 	}
 	template<auto MemPtr0, auto... MemPtrR>
-	void addField(const std::string& get, const std::string& set)
+	void addField(const std::string& getFuncName, const std::string& setFuncName)
 	{
-		addField<MemPtr0, MemPtrR...>(get);
-		addCustomFunc<helper::BindValuePropSet<T, MACRO_CLANG_AUTO_HACK(MemPtr0),  MACRO_CLANG_AUTO_HACK(MemPtrR)...>>(getName(set), "Set field of " + prefix);
+		addField<MemPtr0, MemPtrR...>(getFuncName);
+		addCustomFunc<helper::BindValuePropSet<T, MACRO_CLANG_AUTO_HACK(MemPtr0),  MACRO_CLANG_AUTO_HACK(MemPtrR)...>>(getName(setFuncName), "Set field of " + prefix);
 	}
 	template<auto MemPtr0, auto... MemPtrR>
-	void addField(const std::string& get, const std::string& set, const std::string& add)
+	void addField(const std::string& getFuncName, const std::string& setFuncName, const std::string& addFuncName)
 	{
-		addField<MemPtr0, MemPtrR...>(get, set);
-		addCustomFunc<helper::BindValuePropAdd<T, MACRO_CLANG_AUTO_HACK(MemPtr0), MACRO_CLANG_AUTO_HACK(MemPtrR)...>>(getName(add), "Add to field of " + prefix);
+		addField<MemPtr0, MemPtrR...>(getFuncName, setFuncName);
+		addCustomFunc<helper::BindValuePropAdd<T, MACRO_CLANG_AUTO_HACK(MemPtr0), MACRO_CLANG_AUTO_HACK(MemPtrR)...>>(getName(addFuncName), "Add to field of " + prefix);
 	}
 
 

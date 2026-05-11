@@ -113,7 +113,18 @@ BasescapeState::BasescapeState(Base *base, Globe *globe) : _base(base), _globe(g
 	centerAllSurfaces();
 
 	// Set up objects
-	auto* itf = _game->getMod()->getInterface("basescape")->getElement("trafficLights");
+	if (_globe)
+	{
+		for (auto* xbase : *_game->getSavedGame()->getBases())
+		{
+			int texture, shade;
+			_globe->getPolygonTextureAndShade(xbase->getLongitude(), xbase->getLatitude(), &texture, &shade);
+			auto* globeTexture = _game->getMod()->getGlobe()->getTexture(texture);
+			xbase->setGlobeTexture(globeTexture);
+		}
+	}
+
+	auto* itf = _game->getMod()->getInterface("basescape")->getElementOptional("trafficLights");
 	if (itf)
 	{
 		_view->setOtherColors(itf->color, itf->color2, itf->border, !itf->TFTDMode);
@@ -559,7 +570,7 @@ void BasescapeState::viewMiddleClick(Action *)
 	BaseFacility *f = _view->getSelectedFacility();
 	if (f)
 	{
-		std::string articleId = f->getRules()->getType();
+		std::string articleId = f->getRules()->getUfopediaType();
 		Ufopaedia::openArticle(_game, articleId);
 	}
 }

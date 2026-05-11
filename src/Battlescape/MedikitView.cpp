@@ -29,19 +29,6 @@
 namespace OpenXcom
 {
 /**
- * User interface string identifier of body parts.
- */
-const std::string PARTS_STRING[6] =
-{
-	"STR_HEAD",
-	"STR_TORSO",
-	"STR_RIGHT_ARM",
-	"STR_LEFT_ARM",
-	"STR_RIGHT_LEG",
-	"STR_LEFT_LEG"
-};
-
-/**
  * Initializes the Medikit view.
  * @param w The MinikitView width.
  * @param h The MinikitView height.
@@ -68,7 +55,7 @@ void MedikitView::draw()
 	std::ostringstream ss, ss1;
 	int green = 0;
 	int red = 3;
-	if (_game->getMod()->getInterface("medikit") && _game->getMod()->getInterface("medikit")->getElement("body"))
+	if (_game->getMod()->getInterface("medikit", false) && _game->getMod()->getInterface("medikit")->getElementOptional("body"))
 	{
 		green = _game->getMod()->getInterface("medikit")->getElement("body")->color;
 		red = _game->getMod()->getInterface("medikit")->getElement("body")->color2;

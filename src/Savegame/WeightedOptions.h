@@ -20,7 +20,7 @@
 #include <string>
 #include <map>
 #include <vector>
-#include <yaml-cpp/yaml.h>
+#include "../Engine/Yaml.h"
 
 
 namespace OpenXcom
@@ -44,11 +44,12 @@ public:
 	/// Remove all entries.
 	void clear() { _totalWeight = 0; _choices.clear(); }
 	/// Update our list with data from YAML.
-	void load(const YAML::Node &node);
+	void load(const YAML::YamlNodeReader& reader);
 	/// Store our list in YAML.
-	YAML::Node save() const;
+	void save(YAML::YamlNodeWriter writer) const;
 	/// Get the list of strings associated with these weights.
 	std::vector<std::string> getNames();
+	const std::map<std::string, size_t>& getChoicesRaw() const { return _choices; }
 private:
 	std::map<std::string, size_t> _choices; //!< Options and weights
 	size_t _totalWeight; //!< The total weight of all options.

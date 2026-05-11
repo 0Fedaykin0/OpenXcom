@@ -119,6 +119,7 @@ private:
 	void addIntegerKm(std::ostringstream &ss, const int &value, const std::string &propertyName, const int &defaultvalue = 0);
 	void addIntegerSeconds(std::ostringstream &ss, const int &value, const std::string &propertyName, const int &defaultvalue = 0, const int &value2 = -1);
 	void addVectorOfIntegers(std::ostringstream &ss, const std::vector<int> &vec, const std::string &propertyName);
+	void addMapOfIntegers(std::ostringstream& ss, const std::map<int, int>& map, const std::string& propertyName);
 	void addBattleType(std::ostringstream &ss, const BattleType &value, const std::string &propertyName, const BattleType &defaultvalue = BT_NONE);
 	void addDamageType(std::ostringstream &ss, const ItemDamageType &value, const std::string &propertyName, const ItemDamageType &defaultvalue = DT_NONE);
 	void addDamageRandomType(std::ostringstream &ss, const ItemDamageRandomType &value, const std::string &propertyName, const ItemDamageRandomType &defaultvalue = DRT_DEFAULT);
@@ -126,7 +127,8 @@ private:
 	void addRuleItemUseCostBasic(std::ostringstream &ss, const RuleItemUseCost &value, const std::string &propertyName, const int &defaultvalue = 0);
 	void addBoolOrInteger(std::ostringstream &ss, const int &value, bool formatAsBoolean);
 	void addPercentageSignOrNothing(std::ostringstream &ss, const int &value, bool smartFormat);
-	void addRuleItemUseCostFull(std::ostringstream &ss, const RuleItemUseCost &value, const std::string &propertyName, const RuleItemUseCost &defaultvalue = RuleItemUseCost(), bool smartFormat = false, const RuleItemUseCost &formatBy = RuleItemUseCost());
+	template<typename T>
+	void addRuleItemUseCostFull(std::ostringstream &ss, const RuleItemUseRuleBase<T> &value, const std::string &propertyName, const RuleItemUseRuleBase<T> &defaultvalue = RuleItemUseRuleBase<T>(), bool smartFormat = false, const RuleItemUseFlat &formatBy = RuleItemUseFlat());
 	void addBattleMediKitType(std::ostringstream &ss, const BattleMediKitType &value, const std::string &propertyName, const BattleMediKitType &defaultvalue = BMT_NORMAL);
 	void addMediKitTargets(std::ostringstream& ss, const RuleItem* value, const std::string& propertyName, const int& defaultvalue);
 	void addItemTargets(std::ostringstream& ss, const RuleItem* value, const std::string& propertyName, const int& defaultvalue);
@@ -157,6 +159,9 @@ private:
 	void addHuntBehavior(std::ostringstream &ss, const int &value, const std::string &propertyName, const int &defaultvalue = 0);
 	void initUfoList();
 	void initCraftWeaponList();
+
+	void initSoldierList();
+	void initUnitList();
 
 public:
 	/// Name of class used in script.

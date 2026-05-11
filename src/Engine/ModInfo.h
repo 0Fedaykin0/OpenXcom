@@ -20,17 +20,23 @@
 #include <string>
 #include <map>
 #include <vector>
-#include <yaml-cpp/yaml.h>
+#include "../Engine/Yaml.h"
 
 namespace OpenXcom
 {
 
 /**
- * String with normalized version number,
- * as is not printable it use `signed char` to
- * not confuse it with normal string.
+ * String with normalized version number
  */
-typedef std::basic_string<signed char> ModInfoNormalizedVersion;
+struct ModInfoNormalizedVersion : std::string
+{
+	ModInfoNormalizedVersion() = default;
+	ModInfoNormalizedVersion(ModInfoNormalizedVersion&&) = default;
+	ModInfoNormalizedVersion(const ModInfoNormalizedVersion&) = default;
+
+	ModInfoNormalizedVersion& operator=(ModInfoNormalizedVersion&&) = default;
+	ModInfoNormalizedVersion& operator=(const ModInfoNormalizedVersion&) = default;
+};
 
 /**
  * Version number with normalized value.
@@ -61,7 +67,7 @@ public:
 	/// Creates default metadata for a mod at the specified path.
 	ModInfo(const std::string &path);
 	/// Loads the metadata from YAML.
-	void load(const YAML::Node &doc);
+	void load(const YAML::YamlNodeReader& reader);
 	/// Gets the path where this mod resides on disk.
 	const std::string &getPath() const;
 	/// Gets the name of this mod.

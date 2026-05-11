@@ -18,13 +18,15 @@
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include <map>
+#include <unordered_map>
 #include <limits>
 #include <vector>
 #include <string>
 #include <cstring>
-#include <yaml-cpp/yaml.h>
+#include "../Engine/Yaml.h"
 #include <SDL_stdinc.h>
 #include <cassert>
+#include <unordered_set>
 
 #include "HelperMeta.h"
 #include "Logger.h"
@@ -115,15 +117,6 @@ const inline ScriptText ScriptText::empty = { "" };
 
 
 using ScriptFunc = RetEnum (*)(ScriptWorkerBase&, const Uint8*, ProgPos&);
-
-/**
- * Script execution counter.
- */
-enum class ProgPos : size_t
-{
-	Unknown = (size_t)-1,
-	Start = 0,
-};
 
 inline ProgPos& operator+=(ProgPos& pos, int offset)
 {
@@ -344,8 +337,10 @@ static_assert(ScriptMaxReg < RegInvalid, "RegInvalid could be interpreted as cor
 enum RetEnum : Uint8
 {
 	RetContinue = 0,
-	RetEnd = 1,
-	RetError = 2,
+	RetEnd,
+	RetError,
+
+	RetSize,
 };
 
 /**
@@ -430,12 +425,12 @@ class ScriptContainer : public ScriptContainerBase
 {
 public:
 	/// Load code from string in YAML node.
-	void load(const std::string& parentName, const YAML::Node& node, const Parent& parent)
+	void loadContainer(const std::string& parentName, const YAML::YamlNodeReader& reader, const Parent& parent)
 	{
-		parent.parseNode(*this, parentName, node);
+		parent.parseNode(*this, parentName, reader);
 	}
 	/// Load data from string.
-	void load(const std::string& parentName, const std::string& srcCode, const Parent& parent)
+	void loadContainer(const std::string& parentName, const std::string& srcCode, const Parent& parent)
 	{
 		parent.parseCode(*this, parentName, srcCode);
 	}
@@ -477,12 +472,12 @@ class ScriptContainerEvents : public ScriptContainerEventsBase
 {
 public:
 	/// Load code from string in YAML node.
-	void load(const std::string& parentName, const YAML::Node& node, const Parent& parent)
+	void loadContainer(const std::string& parentName, const YAML::YamlNodeReader& reader, const Parent& parent)
 	{
-		parent.parseNode(*this, parentName, node);
+		parent.parseNode(*this, parentName, reader);
 	}
 	/// Load data from string.
-	void load(const std::string& parentName, const std::string& srcCode, const Parent& parent)
+	void loadContainer(const std::string& parentName, const std::string& srcCode, const Parent& parent)
 	{
 		parent.parseCode(*this, parentName, srcCode);
 	}
@@ -1267,7 +1262,7 @@ protected:
 	bool parseBase(ScriptContainerBase& scr, const std::string& parentName, const std::string& srcCode) const;
 
 	/// Parse node and return new script.
-	void parseNode(ScriptContainerBase& container, const std::string& parentName, const YAML::Node& node) const;
+	void parseNode(ScriptContainerBase& container, const std::string& parentName, const YAML::YamlNodeReader& reader) const;
 
 	/// Parse string and return new script.
 	void parseCode(ScriptContainerBase& container, const std::string& parentName, const std::string& srcCode) const;
@@ -1362,9 +1357,6 @@ public:
 			addType<P>(s);
 		}
 	}
-
-	/// Load global data from YAML.
-	virtual void load(const YAML::Node& node);
 
 	/// Show all script informations.
 	void logScriptMetadata(bool haveEvents, const std::string& groupName) const;
@@ -1520,7 +1512,7 @@ public:
  */
 class ScriptParserEventsBase : public ScriptParserBase
 {
-	constexpr static size_t EventsMax = 64;
+	constexpr static size_t EventsMax = 256;
 	constexpr static size_t OffsetScale = 100;
 	constexpr static size_t OffsetMax = 100 * OffsetScale;
 
@@ -1538,7 +1530,7 @@ class ScriptParserEventsBase : public ScriptParserBase
 
 protected:
 	/// Parse node and return new script.
-	void parseNode(ScriptContainerEventsBase& container, const std::string& type, const YAML::Node& node) const;
+	void parseNode(ScriptContainerEventsBase& container, const std::string& type, const YAML::YamlNodeReader& reader) const;
 	/// Parse string and return new script.
 	void parseCode(ScriptContainerEventsBase& container, const std::string& type, const std::string& srcCode) const;
 
@@ -1547,7 +1539,7 @@ public:
 	ScriptParserEventsBase(ScriptGlobal* shared, const std::string& name);
 
 	/// Load global data from YAML.
-	virtual void load(const YAML::Node& node) override;
+	void loadEvents(const YAML::YamlNodeReader& reader);
 	/// Get pointer to events.
 	const ScriptContainerBase* getEvents() const;
 	/// Release event data.
@@ -1595,7 +1587,7 @@ public:
 /**
  * Strong typed tag.
  */
-template<typename T, typename I = Uint8>
+template<typename T, typename I = Uint16>
 struct ScriptTag
 {
 	static_assert(!std::numeric_limits<I>::is_signed, "Type should be unsigned");
@@ -1639,8 +1631,8 @@ struct ScriptTag
 class ScriptGlobal
 {
 protected:
-	using LoadFunc = void (*)(const ScriptGlobal*, int&, const YAML::Node&);
-	using SaveFunc = void (*)(const ScriptGlobal*, const int&, YAML::Node&);
+	using LoadFunc = void (*)(const ScriptGlobal*, int&, const YAML::YamlNodeReader&);
+	using SaveFunc = void (*)(const ScriptGlobal*, const int&, YAML::YamlNodeWriter&);
 	using CrateFunc = ScriptValueData (*)(size_t i);
 
 	friend class ScriptValuesBase;
@@ -1664,22 +1656,22 @@ protected:
 		std::vector<TagValueData> values;
 	};
 
-	template<typename ThisType, void (ThisType::* LoadValue)(int&, const YAML::Node&) const>
-	static void loadHelper(const ScriptGlobal* base, int& value, const YAML::Node& node)
+	template <typename ThisType, void (ThisType::*LoadValue)(int&, const YAML::YamlNodeReader&) const>
+	static void loadHelper(const ScriptGlobal* base, int& value, const YAML::YamlNodeReader& reader)
 	{
-		(static_cast<const ThisType*>(base)->*LoadValue)(value, node);
+		(static_cast<const ThisType*>(base)->*LoadValue)(value, reader);
 	}
-	template<typename ThisType, void (ThisType::* SaveValue)(const int&, YAML::Node&) const>
-	static void saveHelper(const ScriptGlobal* base, const int& value, YAML::Node& node)
+	template <typename ThisType, void (ThisType::*SaveValue)(const int&, YAML::YamlNodeWriter&) const>
+	static void saveHelper(const ScriptGlobal* base, const int& value, YAML::YamlNodeWriter& writer)
 	{
-		(static_cast<const ThisType*>(base)->*SaveValue)(value, node);
+		(static_cast<const ThisType*>(base)->*SaveValue)(value, writer);
 	}
 
 	void addTagValueTypeBase(const std::string& name, LoadFunc loadFunc, SaveFunc saveFunc)
 	{
 		_tagValueTypes.push_back(TagValueType{ addNameRef(name), loadFunc, saveFunc });
 	}
-	template<typename ThisType, void (ThisType::* LoadValue)(int&, const YAML::Node&) const, void (ThisType::* SaveValue)(const int&, YAML::Node&) const>
+	template <typename ThisType, void (ThisType::*LoadValue)(int&, const YAML::YamlNodeReader&) const, void (ThisType::*SaveValue)(const int&, YAML::YamlNodeWriter&) const>
 	void addTagValueType(const std::string& name)
 	{
 		static_assert(std::is_base_of<ScriptGlobal, ThisType>::value, "Type must be derived");
@@ -1691,7 +1683,7 @@ private:
 	std::vector<std::vector<char>> _strings;
 	std::vector<std::vector<ScriptContainerBase>> _events;
 	std::map<std::string, ScriptParserBase*> _parserNames;
-	std::vector<ScriptParserEventsBase*> _parserEvents;
+	std::unordered_map<std::string_view, ScriptParserEventsBase*> _parserEvents;
 	std::map<ArgEnum, TagData> _tagNames;
 	std::vector<TagValueType> _tagValueTypes;
 	std::vector<ScriptRefData> _refList;
@@ -1783,7 +1775,7 @@ public:
 	virtual void endLoad();
 
 	/// Load global data from YAML.
-	void load(const YAML::Node& node);
+	void load(const YAML::YamlNodeReader& reader);
 };
 
 /**
@@ -1802,15 +1794,15 @@ protected:
 	/// Get value.
 	int getBase(size_t t) const;
 	/// Load values from yaml file.
-	void loadBase(const YAML::Node &node, const ScriptGlobal* shared, ArgEnum type, const std::string& nodeName);
+	void loadBase(const YAML::YamlNodeReader& reader, const ScriptGlobal* shared, ArgEnum type, const std::string& nodeName);
 	/// Save values to yaml file.
-	void saveBase(YAML::Node &node, const ScriptGlobal* shared, ArgEnum type, const std::string& nodeName) const;
+	void saveBase(YAML::YamlNodeWriter& writer, const ScriptGlobal* shared, ArgEnum type, const std::string& nodeName) const;
 };
 
 /**
  * Strong typed collection of values for script.
  */
-template<typename T, typename I = Uint8>
+template<typename T, typename I = Uint16>
 class ScriptValues : ScriptValuesBase
 {
 public:
@@ -1818,14 +1810,14 @@ public:
 	using Parent = T;
 
 	/// Load values from yaml file.
-	void load(const YAML::Node &node, const ScriptGlobal* shared, const std::string& nodeName = "tags")
+	void load(const YAML::YamlNodeReader& reader, const ScriptGlobal* shared, const std::string& nodeName = "tags")
 	{
-		loadBase(node, shared, Tag::type(), nodeName);
+		loadBase(reader, shared, Tag::type(), nodeName);
 	}
 	/// Save values to yaml file.
-	void save(YAML::Node &node, const ScriptGlobal* shared, const std::string& nodeName = "tags") const
+	void save(YAML::YamlNodeWriter writer, const ScriptGlobal* shared, const std::string& nodeName = "tags") const
 	{
-		saveBase(node, shared, Tag::type(), nodeName);
+		saveBase(writer, shared, Tag::type(), nodeName);
 	}
 
 	/// Get value.
@@ -1865,9 +1857,31 @@ public:
 	}
 
 	/// Load scripts.
-	void load(const std::string& type, const YAML::Node& node, const Parent& parsers)
+	void load(const std::string& type, const YAML::YamlNodeReader& reader, const Parent& parsers)
 	{
-		(get<Parsers>().load(type, node, parsers.template get<Parsers>()), ...);
+		if (const YAML::YamlNodeReader& scripts = reader["scripts"])
+		{
+			if (scripts.hasNullVal() == false && scripts.isMap() == false)
+			{
+				throw Exception("Wrong type of 'scripts' node at line " + std::to_string(scripts.getLocationInFile().line));
+			}
+
+			for (auto& p : scripts.children())
+			{
+				auto key = p.key();
+				if (key.length() > 0 && key.back() == '#')
+				{
+					continue;
+				}
+
+				if (parsers.isKnowParserName(key) == false)
+				{
+					throw Exception("Unknown '" + std::string(p.key()) + "' node in 'scripts' at line " + std::to_string(p.getLocationInFile().line));
+				}
+			}
+		}
+
+		(get<Parsers>().loadContainer(type, reader, parsers.template get<Parsers>()), ...); //TODO: some scripts need called even if "scripts" is not present
 	}
 };
 
@@ -1905,6 +1919,8 @@ public:
 template<typename Master, typename... Parsers>
 class ScriptGroup : Parsers...
 {
+	std::unordered_set<std::string_view> _allParserNames;
+
 public:
 	using Container = ScriptGroupContainer<ScriptGroup, Parsers...>;
 
@@ -1914,6 +1930,7 @@ public:
 		(void)master;
 		(void)groupName;
 		(shared->pushParser(groupName, &get<Parsers>()), ...);
+		(_allParserNames.insert(get<Parsers>().getName()), ...);
 	}
 
 	/// Get parser by type.
@@ -1928,6 +1945,12 @@ public:
 	const typename SelectedParser::BaseType& get() const
 	{
 		return *static_cast<const SelectedParser*>(this);
+	}
+
+	/// Check if exists parser for given name
+	bool isKnowParserName(std::string_view view) const
+	{
+		return _allParserNames.find(view) != _allParserNames.end();
 	}
 };
 

@@ -1120,25 +1120,31 @@ void Inventory::mouseClick(Action *action, State *state)
 							{
 								if (item->getFuseTimer() == -1)
 								{
-									// Prime that grenade!
-									if (fuseType == BFT_SET)
+									if (item->getRules()->getCostPrime().Time > 0)
 									{
-										_game->pushState(new PrimeGrenadeState(0, true, item));
-									}
-									else
-									{
-										_warning->showMessage(_game->getLanguage()->getString(item->getRules()->getPrimeActionMessage()));
-										item->setFuseTimer(item->getRules()->getFuseTimerDefault());
-										arrangeGround();
-										playSound(item->getRules()->getPrimeSound()); // prime sound
+										// Prime that grenade!
+										if (fuseType == BFT_SET)
+										{
+											_game->pushState(new PrimeGrenadeState(0, true, item));
+										}
+										else
+										{
+											_warning->showMessage(_game->getLanguage()->getString(item->getRules()->getPrimeActionMessage()));
+											item->setFuseTimer(item->getRules()->getFuseTimerDefault());
+											arrangeGround();
+											playSound(item->getRules()->getPrimeSound()); // prime sound
+										}
 									}
 								}
 								else
 								{
-									_warning->showMessage(_game->getLanguage()->getString(item->getRules()->getUnprimeActionMessage()));
-									item->setFuseTimer(-1);  // Unprime the grenade
-									arrangeGround();
-									playSound(item->getRules()->getUnprimeSound()); // unprime sound
+									if (item->getRules()->getCostUnprime().Time > 0 /* && !item->getRules()->getUnprimeActionName().empty() */ )
+									{
+										_warning->showMessage(_game->getLanguage()->getString(item->getRules()->getUnprimeActionMessage()));
+										item->setFuseTimer(-1);  // Unprime the grenade
+										arrangeGround();
+										playSound(item->getRules()->getUnprimeSound()); // unprime sound
+									}
 								}
 							}
 						}
@@ -1186,6 +1192,29 @@ void Inventory::mouseClick(Action *action, State *state)
 }
 
 /**
+ * Quickly drops the selected item on the ground.
+ * @return The success of the item being dropped.
+ */
+bool Inventory::quickDrop()
+{
+	if (_selUnit && _selItem)
+	{
+		if (!_tu || _selUnit->spendTimeUnits(_selItem->getMoveToCost(_inventorySlotGround)))
+		{
+			moveItem(_selItem, _inventorySlotGround, 0, 0);
+			setSelectedItem(0);
+			return true;
+		}
+		else
+		{
+			_warning->showMessage(_game->getLanguage()->getString("STR_NOT_ENOUGH_TIME_UNITS"));
+		}
+	}
+
+	return false;
+}
+
+/**
  * Unloads the selected weapon, placing the gun
  * on the right hand and the ammo on the left hand.
  * Or if only one hand is free, the gun is placed
@@ -1198,6 +1227,25 @@ bool Inventory::unload(bool quickUnload)
 	// Must be holding an item
 	if (_selItem == 0)
 	{
+		// mobile support: https://openxcom.org/forum/index.php?topic=12880.0
+		if (Options::oxceInventoryUnloadFixedWeapons)
+		{
+			if (!_selUnit) return false;
+			auto weapons = { _selUnit->getRightHandWeapon(), _selUnit->getLeftHandWeapon()};
+			for (auto* item : weapons)
+			{
+				if (!item) continue;
+				if (!item->getRules()->isFixed()) continue;
+				if (!item->haveAnyAmmo()) continue;
+				{
+					_selItem = item; // don't worry, we'll unselect it later!
+					bool success = unload(!_tu);
+					_selItem = 0; // see, I told you!
+					if (success) return true;
+				}
+			}
+		}
+
 		return false;
 	}
 
@@ -1216,6 +1264,10 @@ bool Inventory::unload(bool quickUnload)
 			return false;
 		}
 		if (_selItem->getRules()->getFuseTimerType() == BFT_NONE)
+		{
+			return false;
+		}
+		if (_selItem->getRules()->getCostUnprime().Time == 0 /* || _selItem->getRules()->getUnprimeActionName().empty() */ )
 		{
 			return false;
 		}
@@ -1286,14 +1338,15 @@ bool Inventory::unload(bool quickUnload)
 			_selItem->setFuseTimer(-1);
 			_warning->showMessage(_game->getLanguage()->getString(_selItem->getRules()->getUnprimeActionMessage()));
 			playSound(_selItem->getRules()->getUnprimeSound()); // unprime sound
+			setSelectedItem(0);
 		}
 		else
 		{
 			auto* oldAmmo = _selItem->setAmmoForSlot(slotForAmmoUnload, nullptr);
 			moveItem(oldAmmo, _inventorySlotGround, 0, 0); // 2. + 3. always drop the ammo on the ground
+			setSelectedItem(0); // calling before arrangeGround() to prevent undesired drawing of TU costs
 			arrangeGround();
 		}
-		setSelectedItem(0);
 		return true;
 	}
 

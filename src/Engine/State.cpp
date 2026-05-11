@@ -17,6 +17,7 @@
  * along with OpenXcom.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "State.h"
+#include <algorithm>
 #include <climits>
 #include "InteractiveSurface.h"
 #include "Game.h"
@@ -26,6 +27,7 @@
 #include "LocalizedText.h"
 #include "Palette.h"
 #include "../Engine/Sound.h"
+#include "../Engine/Collections.h"
 #include "../Mod/Mod.h"
 #include "../Interface/Window.h"
 #include "../Interface/TextButton.h"
@@ -61,7 +63,8 @@ State::State() : _screen(true), _soundPlayed(false), _modal(0), _ruleInterface(0
  */
 State::~State()
 {
-	for (auto* surface : _surfaces)
+	// Surfaces are deleted in reverse order of adding, same like local variables
+	for (auto* surface : Collections::reverse(Collections::range(_surfacesOwned)))
 	{
 		delete surface;
 	}
@@ -83,12 +86,12 @@ void State::setInterface(const std::string& category, bool alterPal, SavedBattle
 	{
 		_ruleInterfaceParent = _game->getMod()->getInterface(_ruleInterface->getParent());
 		pal = _ruleInterface->getPalette();
-		Element *element = _ruleInterface->getElement("palette");
+		const Element *element = _ruleInterface->getElementOptional("palette");
 		if (_ruleInterfaceParent)
 		{
 			if (!element)
 			{
-				element = _ruleInterfaceParent->getElement("palette");
+				element = _ruleInterfaceParent->getElementOptional("palette");
 			}
 			if (pal.empty())
 			{
@@ -126,7 +129,7 @@ void State::setInterface(const std::string& category, bool alterPal, SavedBattle
  */
 void State::setWindowBackground(Window *window, const std::string &s)
 {
-	auto& bgImageName = _game->getMod()->getInterface(s)->getBackgroundImage();
+	auto& bgImageName = _game->getMod()->getInterface(s)->getBackgroundImage(_game->getMod(), _game->getSavedGame());
 	setWindowBackgroundImage(window, bgImageName);
 }
 
@@ -140,6 +143,19 @@ void State::setWindowBackgroundImage(Window* window, const std::string& bgImageN
 	const auto* bgImage = _game->getMod()->getSurface(bgImageName);
 	window->setBackground(bgImage);
 }
+
+/**
+ *  Add a optional child element but it will not be displayed.
+ */
+void State::preAdd(Surface *surface)
+{
+	//TODO: O(n^2) but number of surfaces is less than 100 (it become lag araund 100k surfaces) and sort of hash will make deleting order nondetermistic
+	if (std::find(_surfacesOwned.begin(), _surfacesOwned.end(), surface) == _surfacesOwned.end())
+	{
+		_surfacesOwned.push_back(surface);
+	}
+}
+
 
 /**
  * Adds a new child surface for the state to take care of,
@@ -161,6 +177,7 @@ void State::add(Surface *surface)
 		surface->initText(_game->getMod()->getFont("FONT_BIG"), _game->getMod()->getFont("FONT_SMALL"), _game->getLanguage());
 
 	_surfaces.push_back(surface);
+	preAdd(surface);
 }
 
 /**
@@ -181,9 +198,9 @@ void State::add(Surface *surface, const std::string &id, const std::string &cate
 	// this only works if we're dealing with a battlescape button
 	BattlescapeButton *bsbtn = dynamic_cast<BattlescapeButton*>(surface);
 
-	if (_game->getMod()->getInterface(category))
+	if (_game->getMod()->getInterface(category, false))
 	{
-		Element *element = _game->getMod()->getInterface(category)->getElement(id);
+		const Element *element = _game->getMod()->getInterface(category)->getElementOptional(id);
 		if (element)
 		{
 			if (parent && element->w != INT_MAX && element->h != INT_MAX)
@@ -231,6 +248,7 @@ void State::add(Surface *surface, const std::string &id, const std::string &cate
 		surface->initText(_game->getMod()->getFont("FONT_BIG"), _game->getMod()->getFont("FONT_SMALL"), _game->getLanguage());
 
 	_surfaces.push_back(surface);
+	preAdd(surface);
 }
 
 /**
@@ -477,7 +495,7 @@ void State::lowerAllSurfaces()
  */
 void State::applyBattlescapeTheme(const std::string& category)
 {
-	Element * element = _game->getMod()->getInterface("mainMenu")->getElement("battlescapeTheme");
+	const Element * element = _game->getMod()->getInterface("mainMenu")->getElement("battlescapeTheme");
 	std::string altBg = _game->getMod()->getInterface(category)->getAltBackgroundImage();
 	if (altBg.empty())
 	{

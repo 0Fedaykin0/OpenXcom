@@ -19,9 +19,10 @@
  */
 #include <string>
 #include <map>
-#include <yaml-cpp/yaml.h>
+#include "../Engine/Yaml.h"
 #include <stdint.h>
 #include "RuleBaseFacilityFunctions.h"
+#include "../Savegame/WeightedOptions.h"
 
 namespace OpenXcom
 {
@@ -49,7 +50,7 @@ class RuleManufacture
 private:
 	std::string _name, _category;
 	std::string _spawnedPersonType, _spawnedPersonName;
-	YAML::Node _spawnedSoldier;
+	YAML::YamlString _spawnedSoldier;
 	std::vector<std::string> _requiresName;
 	RuleBaseFacilityFunctions _requiresBaseFunc;
 	std::vector<const RuleResearch*> _requires;
@@ -63,6 +64,7 @@ private:
 	std::vector<std::pair<int, std::map<std::string, int> > > _randomProducedItemsNames;
 	std::vector<std::pair<int, std::map<const RuleItem*, int> > > _randomProducedItems;
 	std::vector<int> _transferTimes;
+	WeightedOptions _events;
 	int _listOrder;
 public:
 	static const int MANU_STATUS_NEW = 0;
@@ -73,7 +75,7 @@ public:
 	RuleManufacture(const std::string &name, int listOrder);
 
 	/// Loads the manufacture from YAML.
-	void load(const YAML::Node& node, Mod* mod);
+	void load(const YAML::YamlNodeReader& reader, Mod* mod);
 	/// Cross link with other rules.
 	void afterLoad(const Mod* mod);
 	/// Change the name and break down the sub-projects into simpler components.
@@ -115,11 +117,14 @@ public:
 	/// Gets the custom name of the "manufactured person".
 	const std::string &getSpawnedPersonName() const;
 	/// Gets the spawned soldier template.
-	const YAML::Node& getSpawnedSoldierTemplate() const { return _spawnedSoldier; }
+	const YAML::YamlString& getSpawnedSoldierTemplate() const { return _spawnedSoldier; }
 	/// Is it possible to use auto-sell feature for this manufacturing project?
 	bool canAutoSell() const;
 	/// Gets the transfer time info.
 	const std::vector<int>& getTransferTimes() const { return _transferTimes; }
+	/// Gets geoscape event rule name to spawn after (each) item production
+	std::string chooseEvent() const { return _events.choose(); }
+	const WeightedOptions& getEventsRaw() const { return _events; }
 	/// Gets the list weight for this manufacture item.
 	int getListOrder() const;
 };
